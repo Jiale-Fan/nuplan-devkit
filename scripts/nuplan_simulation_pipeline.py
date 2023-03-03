@@ -107,7 +107,7 @@ def open_nuboard(simulation_folders: list[str]) -> None:
     
 if __name__ == '__main__':
     sim_dicts = []
-    # Simple Planner
+    # # Simple Planner
     # sim_dicts.append(
     #     dict(
     #         # Location of path with all simulation configs
@@ -134,16 +134,16 @@ if __name__ == '__main__':
     #         MODEL = None
     #     )
     # )
-    # Raster Model
+    # # Raster Model
     # sim_dicts.append(
     #     dict(
     #         # Location of path with all simulation configs
     #         CONFIG_PATH = '../nuplan/planning/script/config/simulation',
-    #         CONFIG_NAME = 'default_submission_planner',
+    #         CONFIG_NAME = 'default_simulation',
 
     #         # Select the planner and simulation challenge
     #         PLANNER = 'ml_planner',  # [simple_planner, ml_planner]
-    #         CHALLENGE = 'closed_loop_nonreactive_agents',  # [open_loop_boxes, closed_loop_nonreactive_agents, closed_loop_reactive_agents]
+    #         CHALLENGE = 'open_loop_boxes',  # [open_loop_boxes, closed_loop_nonreactive_agents, closed_loop_reactive_agents]
     #         DATASET_PARAMS = [
     #             'scenario_builder=nuplan_mini',  # use nuplan mini database
     #             'scenario_filter=all_scenarios',  # initially select all scenarios in the database
@@ -161,7 +161,7 @@ if __name__ == '__main__':
     #         MODEL = 'raster_model'
     #     )
     # )
-    # Simple Vector Model
+    # # Simple Vector Model
     sim_dicts.append(
         dict(
             # Location of path with all simulation configs
@@ -179,15 +179,42 @@ if __name__ == '__main__':
             ],
         
             # Name of the experiment
-            EXPERIMENT = 'vector_experiment',
+            EXPERIMENT = 'simple_vector_experiment',
             
             # add save directory
             SAVE_DIR = '/data1/nuplan/exp/exp/simulation',
             
             # for ML Planner only
-            MODEL = 'vector_model'
+            MODEL = 'simple_vector_model'
         )
     )
+    # # Vector Model
+    # sim_dicts.append(
+    #     dict(
+    #         # Location of path with all simulation configs
+    #         CONFIG_PATH = '../nuplan/planning/script/config/simulation',
+    #         CONFIG_NAME = 'default_simulation',
+
+    #         # Select the planner and simulation challenge
+    #         PLANNER = 'ml_planner',  # [simple_planner, ml_planner]
+    #         CHALLENGE = 'open_loop_boxes',  # [open_loop_boxes, closed_loop_nonreactive_agents, closed_loop_reactive_agents]
+    #         DATASET_PARAMS = [
+    #             'scenario_builder=nuplan_mini',  # use nuplan mini database
+    #             'scenario_filter=all_scenarios',  # initially select all scenarios in the database
+    #             'scenario_filter.scenario_types=[near_multiple_vehicles, on_pickup_dropoff, starting_unprotected_cross_turn, high_magnitude_jerk]',  # select scenario types
+    #             'scenario_filter.num_scenarios_per_type=10',  # use 10 scenarios per scenario type
+    #         ],
+        
+    #         # Name of the experiment
+    #         EXPERIMENT = 'vector_experiment',
+            
+    #         # add save directory
+    #         SAVE_DIR = '/data1/nuplan/exp/exp/simulation',
+            
+    #         # for ML Planner only
+    #         MODEL = 'vector_model'
+    #     )
+    # )
     
     simulation_folders = []
     for sim_dict in sim_dicts:

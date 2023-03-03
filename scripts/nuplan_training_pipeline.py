@@ -16,8 +16,17 @@ def train(sim_dict: dict) -> str:
     # Name of the experiment
     EXPERIMENT = sim_dict['EXPERIMENT']
     JOB_NAME = sim_dict['JOB_NAME']
+    TRAINING_MODEL = sim_dict['TRAINING_MODEL']
+    
+    # Training params
+    PY_FUNC = sim_dict['PY_FUNC']
+    SCENARIO_BUILDER = sim_dict['SCENARIO_BUILDER']
+    SCENARIO_SELECTION = sim_dict['SCENARIO_SELECTION']
+    MAX_EPOCHS = sim_dict['MAX_EPOCHS']
+    BATCH_SIZE = sim_dict['BATCH_SIZE']
+    
     LOG_DIR = str(Path(SAVE_DIR) / EXPERIMENT / JOB_NAME)
-    print(LOG_DIR)
+    print('__LOG__' + LOG_DIR)
 
     # Initialize configuration management system
     hydra.core.global_hydra.GlobalHydra.instance().clear()  # reinitialize hydra if already initialized
@@ -29,13 +38,13 @@ def train(sim_dict: dict) -> str:
         f'cache.cache_path={str(SAVE_DIR)}/cache',
         f'experiment_name={EXPERIMENT}',
         f'job_name={JOB_NAME}',
-        'py_func=train',
-        '+training=training_raster_model',  # raster model that consumes ego, agents and map raster layers and regresses the ego's trajectory
-        'scenario_builder=nuplan_mini',  # use nuplan mini database
-        'scenario_filter.limit_total_scenarios=500',  # Choose 500 scenarios to train with
+        f'py_func={PY_FUNC}', # ['train','test','cache']
+        f'+training={TRAINING_MODEL}',  # raster model that consumes ego, agents and map raster layers and regresses the ego's trajectory
+        f'scenario_builder={SCENARIO_BUILDER}',  # use nuplan mini database  # ['nuplan','nuplan_challenge','nuplan_mini']
+        f'scenario_filter.limit_total_scenarios={SCENARIO_SELECTION}',  # Choose 500 scenarios to train with
         'lightning.trainer.params.accelerator=ddp_spawn',  # ddp is not allowed in interactive environment, using ddp_spawn instead - this can bottleneck the data pipeline, it is recommended to run training outside the notebook
-        'lightning.trainer.params.max_epochs=10',
-        'data_loader.params.batch_size=8',
+        f'lightning.trainer.params.max_epochs={MAX_EPOCHS}',
+        f'data_loader.params.batch_size={BATCH_SIZE}',
         'data_loader.params.num_workers=8',
     ])
     
@@ -43,9 +52,9 @@ def train(sim_dict: dict) -> str:
     main_train(cfg)
     
     
-if __name__ == '__main__':
+if __name__ == '__main__': 
     train_dicts = []
-    # Raster Model
+    # # Raster Model
     # train_dicts.append(
     #     dict(
     #         # Location of path with all simulation configs
@@ -55,28 +64,65 @@ if __name__ == '__main__':
     #         # Name of the experiment
     #         EXPERIMENT = 'raster_experiment',
     #         JOB_NAME = 'raster_model',
+    #         TRAINING_MODEL = 'training_raster_model',
+            
+    #         # Training params
+    #         PY_FUNC = 'train', # ['train','test','cache']
+    #         SCENARIO_BUILDER = 'nuplan_mini', # ['nuplan','nuplan_challenge','nuplan_mini']
+    #         SCENARIO_SELECTION = 500,
+    #         MAX_EPOCHS = 10,
+    #         BATCH_SIZE = 8,
+            
     #         # add save directory
     #         SAVE_DIR = '/data1/nuplan/exp/exp/training'
     #     )
     # )
-    # Vector Model
+    # # Simple Vector Model
     train_dicts.append(
         dict(
             # Location of path with all simulation configs
-            # CONFIG_PATH = '../nuplan/planning/script/experiments/training',
-            # CONFIG_NAME = 'training_vector_model',
-            # CONFIG_PATH = '../nuplan/planning/script/config/common/model',
-            # CONFIG_NAME = 'vector_model',
             CONFIG_PATH = '../nuplan/planning/script/config/training',
             CONFIG_NAME = 'default_training',
         
             # Name of the experiment
-            EXPERIMENT = 'vector_experiment',
-            JOB_NAME = 'vector_model',
+            EXPERIMENT = 'simple_vector_experiment',
+            JOB_NAME = 'simple_vector_model',
+            TRAINING_MODEL = 'training_simple_vector_model',
+            
+            # Training params
+            PY_FUNC = 'train', # ['train','test','cache']
+            SCENARIO_BUILDER = 'nuplan_mini', # ['nuplan','nuplan_challenge','nuplan_mini']
+            SCENARIO_SELECTION = 500,
+            MAX_EPOCHS = 10,
+            BATCH_SIZE = 8,
+            
             # add save directory
             SAVE_DIR = '/data1/nuplan/exp/exp/training'
         )
     )
+    # # Vector Model
+    # train_dicts.append(
+    #     dict(
+    #         # Location of path with all simulation configs
+    #         CONFIG_PATH = '../nuplan/planning/script/config/training',
+    #         CONFIG_NAME = 'default_training',
+        
+    #         # Name of the experiment
+    #         EXPERIMENT = 'vector_experiment',
+    #         JOB_NAME = 'vector_model',
+    #         TRAINING_MODEL = 'training_vector_model',
+            
+    #         # Training params
+    #         PY_FUNC = 'train', # ['train','test','cache']
+    #         SCENARIO_BUILDER = 'nuplan_mini', # ['nuplan','nuplan_challenge','nuplan_mini']
+    #         SCENARIO_SELECTION = 500,
+    #         MAX_EPOCHS = 10,
+    #         BATCH_SIZE = 8,
+            
+    #         # add save directory
+    #         SAVE_DIR = '/data1/nuplan/exp/exp/training'
+    #     )
+    # )
     
     for train_dict in train_dicts:
         train(train_dict)
