@@ -18,7 +18,9 @@ Test phase: Strict limit of THREE submission.
 
 # TODO
 
-Not able to visualize because the lack of example input.
+Try to understand better using the graph. 
+
+Understand attention module more and examine input data dimensions and classes. 
 
 # Log
 
