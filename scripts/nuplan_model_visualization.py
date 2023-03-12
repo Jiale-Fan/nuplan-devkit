@@ -6,7 +6,7 @@ from omegaconf import DictConfig
 import tempfile
 
 
-def train(sim_dict: dict) -> str:
+def visualize(sim_dict: dict) -> str:
     # Location of path with all simulation configs
     CONFIG_PATH = sim_dict['CONFIG_PATH']
     CONFIG_NAME = sim_dict['CONFIG_NAME']
@@ -49,7 +49,9 @@ def train(sim_dict: dict) -> str:
     ])
     
     # Run the training loop, optionally inspect training artifacts through tensorboard (above cell)
-    main_train(cfg)
+    engine=main_train(cfg)
+    engine.save_visualize_info('/data1/nuplan/jiale/model_vis')
+    print("done. ")
     
     
 if __name__ == '__main__': 
@@ -115,9 +117,9 @@ if __name__ == '__main__':
             # Training params
             PY_FUNC = 'train', # ['train','test','cache']
             SCENARIO_BUILDER = 'nuplan_mini', # ['nuplan','nuplan_challenge','nuplan_mini']
-            SCENARIO_SELECTION = 500,
-            MAX_EPOCHS = 10,
-            BATCH_SIZE = 8,
+            SCENARIO_SELECTION = 20,
+            MAX_EPOCHS = 1,
+            BATCH_SIZE = 1,
             
             # add save directory
             SAVE_DIR = '/data1/nuplan/jiale/exp'
@@ -150,4 +152,4 @@ if __name__ == '__main__':
     
     
     for train_dict in train_dicts:
-        train(train_dict)
+        visualize(train_dict)
