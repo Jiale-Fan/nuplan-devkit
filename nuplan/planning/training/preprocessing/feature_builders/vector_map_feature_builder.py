@@ -129,6 +129,7 @@ class VectorMapFeatureBuilder(ScriptableFeatureBuilder):
         with torch.no_grad():
             ego_state = scenario.initial_ego_state
             ego_coords = Point2D(ego_state.rear_axle.x, ego_state.rear_axle.y)
+            
             (
                 lane_seg_coords,
                 lane_seg_conns,
