@@ -15,6 +15,7 @@ from nuplan.planning.utils.multithreading.worker_pool import WorkerPool
 
 from torch.utils.tensorboard import SummaryWriter
 from torchviz import make_dot
+import pickle
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,13 @@ class TrainingEngine:
         dataiter = iter(trainloader)
         datainput= next(dataiter)
         # datainput:[{'vector_map': VectorMap(coords=[te...ing_dim=2), 'agents': Agents(ego=[tensor([...e+00]]])])}, {'trajectory': Trajectory(data=tens....3670]]]))}, [<nuplan.planning.sce...7e0131a30>]]
+        
+        # save the input to file to enable a closer look 
+        file_name="./project_records/laneGCN_input_sample.obj"
+        with open(file_name, 'wb') as file:
+            pickle.dump(datainput, file)
+            print(f'Object successfully saved to "{file_name}"')
+
         graph_obj=make_dot(self.model(datainput[0])['trajectory'].data, params=dict(self.model.named_parameters()), show_attrs=True, show_saved=True)
         graph_obj.render("./project_records/images/model_vis.dot")
         # .pdf as the same name is stored under the same directory. 
@@ -65,7 +73,7 @@ class TrainingEngine:
 
 
 def build_training_engine(cfg: DictConfig, worker: WorkerPool) -> TrainingEngine:
-    """
+    """datainput[0])['trajectory'].data
     Build the three core lightning modules: LightningDataModule, LightningModule and Trainer
     :param cfg: omegaconf dictionary
     :param worker: Worker to submit tasks which can be executed in parallel
