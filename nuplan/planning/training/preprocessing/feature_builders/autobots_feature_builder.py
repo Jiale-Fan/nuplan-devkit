@@ -25,17 +25,20 @@ from nuplan.planning.training.preprocessing.features.vector_map import VectorMap
 from nuplan.planning.training.preprocessing.features.agents import Agents
 from nuplan.planning.training.preprocessing.feature_builders.vector_map_feature_builder import VectorMapFeatureBuilder
 from nuplan.planning.training.preprocessing.feature_builders.agents_feature_builder import AgentsFeatureBuilder
+from nuplan.planning.training.preprocessing.target_builders.ego_trajectory_target_builder import EgoTrajectoryTargetBuilder
+from nuplan.planning.training.preprocessing.features.trajectory import Trajectory
+
 import numpy as np
 from numpy.typing import NDArray
 
 def coords_to_map_attr(coords) -> NDArray:
-    """_summary_
+    """Map coordinates in VectorMap format to AutoBots features
 
     Args:
-        coords (_type_): _description_
+        coords NDArray with shape [num_segments, 2, 2]: one element in coords List of VectorMap
 
     Returns:
-        _type_: _description_
+        point_feature_tab NDArray with shape [num_segments, 4]: 4 attributes are x, y, angles, existence mask
     """
     vec = np.squeeze(coords[:,1,:])-np.squeeze(coords[:,0,:])
     angles=np.arctan2(vec[:,1], vec[:,0]).reshape((-1, 1))
@@ -79,7 +82,7 @@ class AutobotsMapFeatureBuilder(VectorMapFeatureBuilder):
         """_summary_
 
         Args:
-            scenario (AbstractScenario): _description_
+            scenario (AbstractScenario): see base class
 
         Returns:
             Tensor: shape [B, S, P, map_attr+1] example [64,100,40,4]
@@ -139,7 +142,7 @@ class AutobotsAgentsFeatureBuilder(AgentsFeatureBuilder):
         """_summary_
 
         Args:
-            scenario (AbstractScenario): _description_
+            scenario (AbstractScenario): see base class
 
         Returns:
             Tensor: [B, T_obs, M-1, k_attr+1] example [64,4,7,3]
@@ -163,5 +166,32 @@ class AutobotsAgentsFeatureBuilder(AgentsFeatureBuilder):
 
 
         return Tensor(agents_ts)
-        
+
+
+class AutobotsTargetBuilder(EgoTrajectoryTargetBuilder):
+    """Trajectory builders constructed the desired ego's trajectory from a scenario."""
+    @classmethod
+    def get_feature_unique_name(cls) -> str:
+        """Inherited, see superclass."""
+        return "tensor_trajectory"
+
+    @classmethod
+    def get_feature_type(cls) -> Type[AbstractModelFeature]:
+        """Inherited, see superclass."""
+        return Tensor  # type: ignore
+
+    def get_targets(self, scenario: AbstractScenario) -> Tensor:
+        targets = super(AutobotsTargetBuilder, self).get_targets(scenario)
+
+        # since in AutoBots, the last colomn of values are existence mask, not heading direction angles, 
+        # we overwrite them all with 1
+
+        targets=self.TrajectoryToAutobotsEgoin(targets)
+
+        return Tensor(targets)
+
+    def TrajectoryToAutobotsEgoin(self, target: Trajectory):
+        target_ts=target.data
+        target_ts[:,:,2]=1
+        return target_ts
        

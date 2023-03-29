@@ -5,6 +5,8 @@ from nuplan.planning.script.run_training import main as main_train
 from omegaconf import DictConfig
 import tempfile
 import pickle
+from nuplan.planning.training.preprocessing.feature_builders.autobots_feature_builder import AutobotsMapFeatureBuilder, AutobotsAgentsFeatureBuilder, AutobotsTargetBuilder
+from nuplan.planning.simulation.trajectory.trajectory_sampling import TrajectorySampling
 
 
 file_name="./project_records/laneGCN_input_sample.obj"
@@ -13,8 +15,7 @@ with open(file_name, 'rb') as file:
     datainput=pickle.load(file)
     print(f'Object successfully loaded to "{file_name}"')
 
-from nuplan.planning.training.preprocessing.feature_builders.autobots_feature_builder import AutobotsMapFeatureBuilder, AutobotsAgentsFeatureBuilder
-from nuplan.planning.simulation.trajectory.trajectory_sampling import TrajectorySampling
+
 
 def testMap():
     fb=AutobotsMapFeatureBuilder(1.0)
@@ -34,5 +35,15 @@ def testAgents():
 
     print(ts)
 
-testAgents()
+def testTrajectory():
+    fb=AutobotsTargetBuilder(TrajectorySampling(num_poses=10, time_horizon=5.0))
+
+    ag=datainput[1]['trajectory']
+
+    ts=fb.TrajectoryToAutobotsEgoin(ag)
+
+    print(ts)
+
+testTrajectory()
+# testAgents()
 # testMap()
