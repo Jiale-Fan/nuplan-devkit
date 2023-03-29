@@ -4,8 +4,16 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from context_encoders import MapEncoderCNN, MapEncoderPts
+from torch import Tensor
 from nuplan.planning.training.modeling.torch_module_wrapper import TorchModuleWrapper
+from nuplan.planning.training.preprocessing.feature_builders.autobots_feature_builder import AutobotsAgentsFeatureBuilder, AutobotsMapFeatureBuilder, AutobotsTargetBuilder
+from nuplan.planning.training.preprocessing.target_builders.ego_trajectory_target_builder import EgoTrajectoryTargetBuilder
+
+from nuplan.planning.simulation.trajectory.trajectory_sampling import TrajectorySampling
+
+from typing import List, Optional, cast
+# from context_encoders import MapEncoderCNN, MapEncoderPts
+from nuplan.planning.training.modeling.models.context_encoders import MapEncoderCNN, MapEncoderPts
 
 def init(module, weight_init, bias_init, gain=1):
     '''
@@ -73,9 +81,28 @@ class AutoBotEgo(TorchModuleWrapper):
     '''
     AutoBot-Ego Class.
     '''
-    def __init__(self, d_k=128, _M=5, c=5, T=30, L_enc=1, dropout=0.0, k_attr=2, map_attr=3,
-                 num_heads=16, L_dec=1, tx_hidden_size=384, use_map_img=False, use_map_lanes=False):
-        super(AutoBotEgo, self).__init__()
+    def __init__(self, 
+        vector_map_feature_radius: int,
+        vector_map_connection_scales: Optional[List[int]],
+        past_trajectory_sampling: TrajectorySampling,
+        future_trajectory_sampling: TrajectorySampling,
+        d_k=128, _M=5, c=5, T=30, L_enc=1, dropout=0.0, k_attr=2, map_attr=3,
+        num_heads=16, L_dec=1, tx_hidden_size=384, use_map_img=False, use_map_lanes=False, 
+        ):
+
+        
+        super().__init__(
+            feature_builders=[
+                AutobotsMapFeatureBuilder(
+                    radius=vector_map_feature_radius,
+                    connection_scales=vector_map_connection_scales,
+                ),
+                AutobotsAgentsFeatureBuilder(trajectory_sampling=past_trajectory_sampling),
+            ],
+            target_builders=[AutobotsTargetBuilder(future_trajectory_sampling=future_trajectory_sampling),
+            EgoTrajectoryTargetBuilder(future_trajectory_sampling=future_trajectory_sampling)],
+            future_trajectory_sampling=future_trajectory_sampling,
+        )
 
         init_ = lambda m: init(m, nn.init.xavier_normal_, lambda x: nn.init.constant_(x, 0), np.sqrt(2))
 
@@ -207,7 +234,7 @@ class AutoBotEgo(TorchModuleWrapper):
         agents_soc_emb = agents_soc_emb.view(self._M+1, B, T_obs, -1).permute(2, 1, 0, 3)
         return agents_soc_emb
 
-    def forward(self, ego_in, agents_in, roads):
+    def forward(self, ego_in: Tensor, agents_in: Tensor, roads: Tensor):
         '''
         :param ego_in: [B, T_obs, k_attr+1] with last values being the existence mask. 
         :param agents_in: [B, T_obs, M-1, k_attr+1] with last values being the existence mask.
