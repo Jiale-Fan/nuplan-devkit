@@ -9,7 +9,8 @@ from nuplan.planning.training.preprocessing.feature_builders.autobots_feature_bu
 from nuplan.planning.simulation.trajectory.trajectory_sampling import TrajectorySampling
 
 
-file_name="./project_records/laneGCN_input_sample.obj"
+# file_name="./project_records/laneGCN_input_sample.obj" # one batch with batch size 1
+file_name="./project_records/laneGCN_input_sample_batch.pkl" # one batch with batch size 2
 
 with open(file_name, 'rb') as file:
     datainput=pickle.load(file)
@@ -45,5 +46,5 @@ def testTrajectory():
     print(ts)
 
 testTrajectory()
-# testAgents()
-# testMap()
+testAgents()
+testMap()

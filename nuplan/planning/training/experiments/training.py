@@ -59,7 +59,7 @@ class TrainingEngine:
         # datainput:[{'vector_map': VectorMap(coords=[te...ing_dim=2), 'agents': Agents(ego=[tensor([...e+00]]])])}, {'trajectory': Trajectory(data=tens....3670]]]))}, [<nuplan.planning.sce...7e0131a30>]]
         
         # save the input to file to enable a closer look 
-        file_name="./project_records/laneGCN_input_sample.obj"
+        file_name="./project_records/laneGCN_input_sample_batch.pkl"
         with open(file_name, 'wb') as file:
             pickle.dump(datainput, file)
             print(f'Object successfully saved to "{file_name}"')

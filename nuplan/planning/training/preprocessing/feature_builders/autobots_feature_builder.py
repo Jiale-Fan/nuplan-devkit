@@ -30,6 +30,7 @@ from nuplan.planning.training.preprocessing.features.trajectory import Trajector
 
 import numpy as np
 from numpy.typing import NDArray
+import itertools
 
 def coords_to_map_attr(coords) -> NDArray:
     """Map coordinates in VectorMap format to AutoBots features
@@ -92,14 +93,16 @@ class AutobotsMapFeatureBuilder(VectorMapFeatureBuilder):
 
         # TODO: S and P dimension must be bigger than that of the original data
         S=200 # 100
-        P=250 # 40
+        P=300 # 40
         
         # to debug: check the maximum number of segment contained in one lane
         lengths = [[len(x) for x in sublist] for sublist in vec_map.lane_groupings]
-        max_length = np.max(np.array(lengths))
+        length_maxes=[ np.max(np.array(x)) for x in lengths]
+        max_length = np.max(length_maxes)
 
         padded_list_list = [[np.pad(x, (0, max(P - len(x), 0)), 'constant') for x in sublist] for sublist in vec_map.lane_groupings]
         # [TODO]if P < len(x) ??
+        # if you experience exception here, it may be the presence of P < len(x). Check max_length and P values.
         list_of_idx_array = [ np.array(l, np.float64) for l in padded_list_list] # l's shape = [num_lane, P]
         list_of_feature_array = [ coords_to_map_attr(coord_mat) for coord_mat in vec_map.coords]
 
@@ -152,7 +155,8 @@ class AutobotsAgentsFeatureBuilder(AgentsFeatureBuilder):
         M_minus_1 = 80 # maximum agent number
 
         lengths = [x.shape[1] for x in agents.agents]
-        max_length = np.max(np.array(lengths))
+        length_maxes=[ np.max(np.array(x)) for x in lengths]
+        max_length = np.max(length_maxes)
 
         padded_list=[ np.pad(arr, ((0, 0), (0, max(M_minus_1-arr.shape[1], 0)), (0, 0)), 'constant')  for arr in agents.agents]
 
@@ -162,7 +166,7 @@ class AutobotsAgentsFeatureBuilder(AgentsFeatureBuilder):
         
         agents_ts=agents_ts[:,:,:,0:3] # take only x, y coordinates and an addtional dimension to be existence mask
 
-        agents_ts[:,:,:,2] = 1
+        agents_ts[:,:,:,2] = (agents_ts[:,:,:,2]!=0)
 
 
         return Tensor(agents_ts)

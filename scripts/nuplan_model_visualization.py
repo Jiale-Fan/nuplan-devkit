@@ -117,9 +117,9 @@ if __name__ == '__main__':
             # Training params
             PY_FUNC = 'train', # ['train','test','cache']
             SCENARIO_BUILDER = 'nuplan_mini', # ['nuplan','nuplan_challenge','nuplan_mini']
-            SCENARIO_SELECTION = 20,
+            SCENARIO_SELECTION = 100,
             MAX_EPOCHS = 1,
-            BATCH_SIZE = 1,
+            BATCH_SIZE = 2,
             
             # add save directory
             SAVE_DIR = '/data1/nuplan/jiale/exp'
