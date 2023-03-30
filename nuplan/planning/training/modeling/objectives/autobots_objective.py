@@ -47,7 +47,11 @@ class AutobotsObjective(AbstractObjective):
         :return: loss scalar tensor
         
         """
-        pred_obs, mode_probs = predictions
+
+        pred_obs = cast(Tensor, predictions["pred"])
+        mode_probs = cast(Tensor, predictions["mode_probs"])
+
+        
 
         nll_loss, kl_loss, post_entropy, adefde_loss = nll_loss_multimodes(pred_obs, targets[:, :, :2], mode_probs,
                                                                                    entropy_weight=self.entropy_weight,

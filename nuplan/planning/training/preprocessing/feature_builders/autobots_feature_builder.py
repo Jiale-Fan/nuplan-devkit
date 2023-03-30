@@ -27,6 +27,9 @@ from nuplan.planning.training.preprocessing.feature_builders.vector_map_feature_
 from nuplan.planning.training.preprocessing.feature_builders.agents_feature_builder import AgentsFeatureBuilder
 from nuplan.planning.training.preprocessing.target_builders.ego_trajectory_target_builder import EgoTrajectoryTargetBuilder
 from nuplan.planning.training.preprocessing.features.trajectory import Trajectory
+from nuplan.planning.training.preprocessing.features.abstract_model_feature import AbstractModelFeature
+from nuplan.planning.training.preprocessing.target_builders.abstract_target_builder import AbstractTargetBuilder
+
 
 import numpy as np
 from numpy.typing import NDArray
@@ -53,7 +56,7 @@ def coords_to_map_attr(coords) -> NDArray:
     return point_feature_tab
 
 
-
+# This class is unused
 class AutobotsMapFeatureBuilder(VectorMapFeatureBuilder):
     @torch.jit.unused
     def get_feature_type(self) -> Type[AbstractModelFeature]:
@@ -115,7 +118,7 @@ class AutobotsMapFeatureBuilder(VectorMapFeatureBuilder):
 
         return Tensor(map_autobots)
 
-
+# This class is unused
 class AutobotsAgentsFeatureBuilder(AgentsFeatureBuilder):
     @torch.jit.unused
     def get_feature_type(self) -> Type[AbstractModelFeature]:
@@ -172,6 +175,7 @@ class AutobotsAgentsFeatureBuilder(AgentsFeatureBuilder):
         return Tensor(agents_ts)
 
 
+# This class is unused
 class AutobotsTargetBuilder(EgoTrajectoryTargetBuilder):
     """Trajectory builders constructed the desired ego's trajectory from a scenario."""
     @classmethod
@@ -198,4 +202,35 @@ class AutobotsTargetBuilder(EgoTrajectoryTargetBuilder):
         target_ts=target.data
         target_ts[:,:,2]=1
         return target_ts
+
+class AutobotsPredNominalTargetBuilder(AbstractTargetBuilder):
+    def get_feature_unique_name(cls) -> str:
+        """Inherited, see superclass."""
+        return "pred"
+
+    @classmethod
+    def get_feature_type(cls) -> Type[AbstractModelFeature]:
+        """Inherited, see superclass."""
+        return Trajectory  # type: ignore
+
+    def get_targets(self, scenario: AbstractScenario) -> Tensor:
+
+        nominal_target = Trajectory(np.zeros((1,2,3)))
+        return nominal_target
+
+
+class AutobotsModeProbsNominalTargetBuilder(AbstractTargetBuilder):
+    def get_feature_unique_name(cls) -> str:
+        """Inherited, see superclass."""
+        return "mode_probs"
+
+    @classmethod
+    def get_feature_type(cls) -> Type[AbstractModelFeature]:
+        """Inherited, see superclass."""
+        return Trajectory  # type: ignore
+
+    def get_targets(self, scenario: AbstractScenario) -> Tensor:
+
+        nominal_target = Trajectory(np.zeros((1,2,3)))
+        return nominal_target
        

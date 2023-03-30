@@ -41,7 +41,9 @@ def coords_to_map_attr(coords) -> NDArray:
     Returns:
         point_feature_tab NDArray with shape [num_segments, 4]: 4 attributes are x, y, angles, existence mask
     """
+    coords=coords.cpu()
     vec = np.squeeze(coords[:,1,:])-np.squeeze(coords[:,0,:])
+    
     angles=np.arctan2(vec[:,1], vec[:,0]).reshape((-1, 1))
 
     # get point feature tablular of shape [p_total, 3]
@@ -74,7 +76,7 @@ def VectorMapToAutobotsMapTensor(vec_map: VectorMap):
     length_maxes=[ np.max(np.array(x)) for x in lengths]
     max_length = np.max(length_maxes)
 
-    padded_list_list = [[np.pad(x, (0, max(P - len(x), 0)), 'constant') for x in sublist] for sublist in vec_map.lane_groupings]
+    padded_list_list = [[np.pad(x.cpu(), (0, max(P - len(x), 0)), 'constant') for x in sublist] for sublist in vec_map.lane_groupings]
     # [TODO]if P < len(x) ??
     # if you experience exception here, it may be the presence of P < len(x). Check max_length and P values.
     list_of_idx_array = [ np.array(l, np.float64) for l in padded_list_list] # l's shape = [num_lane, P]
@@ -108,7 +110,7 @@ def AgentsToAutobotsAgentsTensor(agents: Agents):
     length_maxes=[ np.max(np.array(x)) for x in lengths]
     max_length = np.max(length_maxes)
 
-    padded_list=[ np.pad(arr, ((0, 0), (0, max(M_minus_1-arr.shape[1], 0)), (0, 0)), 'constant')  for arr in agents.agents]
+    padded_list=[ np.pad(arr.cpu(), ((0, 0), (0, max(M_minus_1-arr.shape[1], 0)), (0, 0)), 'constant')  for arr in agents.agents]
 
     extended_list= [np.expand_dims(x, 0) for x in padded_list]
     
@@ -132,15 +134,15 @@ def AgentsToAutobotsEgoinTensor(agents: Agents):
         Tensor: [B, T_obs, k_attr+1] example [64,4,3]
     """
 
-    ego_in=np.array(agents.ego)
+    ego_in=torch.stack(agents.ego)
     ego_in[:,:,2]=1
-    return Tensor(ego_in)
+    return ego_in
 
-# @torch.jit.unused
-# def TrajectoryToAutobotsEgoin(agents: Agents):
-#     target_ts=agents.ego
-#     target_ts[:,:,2]=1
-#     return target_ts
+@torch.jit.unused
+def TrajectoryToAutobotsEgoin(traj: Trajectory):
+    target_ts=traj.data
+    target_ts[:,:,2]=1
+    return target_ts
 
 @torch.jit.unused
 def output_tensor_to_trajectory(pred_obs: Tensor, mode_probs: Tensor) -> Trajectory:
@@ -152,8 +154,8 @@ def output_tensor_to_trajectory(pred_obs: Tensor, mode_probs: Tensor) -> Traject
         mode_probs: shape [B, c] mode probability predictions P(z|X_{1:T_obs})
     """
 
-    most_likely_idx=np.argmax(mode_probs, 1)
-    trajs=pred_obs[most_likely_idx,:,:,:]
+    most_likely_idx=torch.argmax(mode_probs, 1)
+    trajs=pred_obs.cpu()[most_likely_idx,:,:,:]
 
     # convert from [1,T,B,5] to [B,T,5]
     trajs=np.squeeze(trajs)

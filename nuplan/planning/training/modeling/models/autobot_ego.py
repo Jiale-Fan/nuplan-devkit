@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 from nuplan.planning.training.modeling.torch_module_wrapper import TorchModuleWrapper
-from nuplan.planning.training.preprocessing.feature_builders.autobots_feature_builder import AutobotsAgentsFeatureBuilder, AutobotsMapFeatureBuilder, AutobotsTargetBuilder
+from nuplan.planning.training.preprocessing.feature_builders.autobots_feature_builder import AutobotsPredNominalTargetBuilder, AutobotsModeProbsNominalTargetBuilder
 from nuplan.planning.training.preprocessing.target_builders.ego_trajectory_target_builder import EgoTrajectoryTargetBuilder
 
 from nuplan.planning.simulation.trajectory.trajectory_sampling import TrajectorySampling
@@ -21,6 +21,7 @@ from nuplan.planning.training.modeling.types import FeaturesType, TargetsType
 from typing import List, Optional, cast
 # from context_encoders import MapEncoderCNN, MapEncoderPts
 from nuplan.planning.training.modeling.models.context_encoders import MapEncoderCNN, MapEncoderPts
+
 
 def init(module, weight_init, bias_init, gain=1):
     '''
@@ -119,6 +120,8 @@ class AutoBotEgo(TorchModuleWrapper):
                 ),
                 AgentsFeatureBuilder(trajectory_sampling=past_trajectory_sampling),
             ],
+            # target_builders=[EgoTrajectoryTargetBuilder(future_trajectory_sampling=future_trajectory_sampling),
+            # AutobotsPredNominalTargetBuilder(), AutobotsModeProbsNominalTargetBuilder()],
             target_builders=[EgoTrajectoryTargetBuilder(future_trajectory_sampling=future_trajectory_sampling)],
             future_trajectory_sampling=future_trajectory_sampling,
         )
@@ -219,6 +222,7 @@ class AutoBotEgo(TorchModuleWrapper):
         env_masks = env_masks.unsqueeze(1).repeat(1, self.c, 1).view(ego.shape[0] * self.c, -1)
 
         # Agents stuff
+        agents=agents.cuda()
         temp_masks = torch.cat((torch.ones_like(env_masks_orig.unsqueeze(-1)), agents[:, :, :, -1]), dim=-1)
         opps_masks = (1.0 - temp_masks).type(torch.BoolTensor).to(agents.device)  # only for agents.
         opps_tensor = agents[:, :, :, :self.k_attr]  # only opponent states
@@ -344,5 +348,7 @@ class AutoBotEgo(TorchModuleWrapper):
         # return  [c, T, B, 5], [B, c]
         # return out_dists, mode_probs
 
-        return {"trajectory": Trajectory(data=traj), "mode_probs": mode_probs, "pred": out_dists}
+        # return {"trajectory": Trajectory(data=traj), "mode_probs": mode_probs, "pred": out_dists}
+        return {"trajectory": Trajectory(data=traj)}
+
 

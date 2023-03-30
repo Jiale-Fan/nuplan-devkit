@@ -8,7 +8,7 @@ defaults:
       - kinematic_agent_augmentation
       - agent_dropout_augmentation
   - override /objective:
-      - autobots_objective # does this need modification?
+      - imitation_objective # does this need modification?
   - override /splitter: nuplan
   - override /model: autobots_model
   - override /scenario_filter: training_scenarios

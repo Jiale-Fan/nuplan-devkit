@@ -50,7 +50,7 @@ def visualize(sim_dict: dict) -> str:
     
     # Run the training loop, optionally inspect training artifacts through tensorboard (above cell)
     engine=main_train(cfg)
-    engine.save_visualize_info('/data1/nuplan/jiale/model_vis')
+    # engine.save_visualize_info('/data1/nuplan/jiale/model_vis')
     print("done. ")
     
     
