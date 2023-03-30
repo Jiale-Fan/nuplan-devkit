@@ -13,7 +13,7 @@ from nuplan.planning.simulation.trajectory.trajectory_sampling import Trajectory
 from nuplan.planning.training.preprocessing.feature_builders.vector_map_feature_builder import VectorMapFeatureBuilder
 from nuplan.planning.training.preprocessing.features.agents import Agents
 from nuplan.planning.training.preprocessing.features.vector_map import VectorMap
-from nuplan.planning.training.preprocessing.features.trajectory import Trajectory
+from nuplan.planning.training.preprocessing.features.tensor_target import TensorTarget
 from nuplan.planning.training.preprocessing.feature_builders.agents_feature_builder import AgentsFeatureBuilder
 import nuplan.planning.training.preprocessing.features.autobots_feature_conversion as autobots_conv
 from nuplan.planning.training.modeling.types import FeaturesType, TargetsType
@@ -120,9 +120,9 @@ class AutoBotEgo(TorchModuleWrapper):
                 ),
                 AgentsFeatureBuilder(trajectory_sampling=past_trajectory_sampling),
             ],
-            # target_builders=[EgoTrajectoryTargetBuilder(future_trajectory_sampling=future_trajectory_sampling),
-            # AutobotsPredNominalTargetBuilder(), AutobotsModeProbsNominalTargetBuilder()],
-            target_builders=[EgoTrajectoryTargetBuilder(future_trajectory_sampling=future_trajectory_sampling)],
+            target_builders=[EgoTrajectoryTargetBuilder(future_trajectory_sampling=future_trajectory_sampling),
+            AutobotsPredNominalTargetBuilder(), AutobotsModeProbsNominalTargetBuilder()],
+            # target_builders=[EgoTrajectoryTargetBuilder(future_trajectory_sampling=future_trajectory_sampling)],
             future_trajectory_sampling=future_trajectory_sampling,
         )
 
@@ -348,7 +348,7 @@ class AutoBotEgo(TorchModuleWrapper):
         # return  [c, T, B, 5], [B, c]
         # return out_dists, mode_probs
 
-        # return {"trajectory": Trajectory(data=traj), "mode_probs": mode_probs, "pred": out_dists}
-        return {"trajectory": Trajectory(data=traj)}
+        return {"trajectory": traj, "mode_probs": TensorTarget(data=mode_probs), "pred": TensorTarget(data=out_dists)}
+        # return {"trajectory": traj}
 
 

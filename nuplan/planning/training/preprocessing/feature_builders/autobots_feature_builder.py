@@ -29,7 +29,7 @@ from nuplan.planning.training.preprocessing.target_builders.ego_trajectory_targe
 from nuplan.planning.training.preprocessing.features.trajectory import Trajectory
 from nuplan.planning.training.preprocessing.features.abstract_model_feature import AbstractModelFeature
 from nuplan.planning.training.preprocessing.target_builders.abstract_target_builder import AbstractTargetBuilder
-
+from nuplan.planning.training.preprocessing.features.tensor_target import TensorTarget
 
 import numpy as np
 from numpy.typing import NDArray
@@ -211,11 +211,11 @@ class AutobotsPredNominalTargetBuilder(AbstractTargetBuilder):
     @classmethod
     def get_feature_type(cls) -> Type[AbstractModelFeature]:
         """Inherited, see superclass."""
-        return Trajectory  # type: ignore
+        return TensorTarget  # type: ignore
 
     def get_targets(self, scenario: AbstractScenario) -> Tensor:
 
-        nominal_target = Trajectory(np.zeros((1,2,3)))
+        nominal_target = TensorTarget(data=np.zeros((2,2)))
         return nominal_target
 
 
@@ -227,10 +227,10 @@ class AutobotsModeProbsNominalTargetBuilder(AbstractTargetBuilder):
     @classmethod
     def get_feature_type(cls) -> Type[AbstractModelFeature]:
         """Inherited, see superclass."""
-        return Trajectory  # type: ignore
+        return TensorTarget  # type: ignore
 
     def get_targets(self, scenario: AbstractScenario) -> Tensor:
 
-        nominal_target = Trajectory(np.zeros((1,2,3)))
+        nominal_target = TensorTarget(data=np.zeros((2,2)))
         return nominal_target
        

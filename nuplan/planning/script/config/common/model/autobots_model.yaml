@@ -5,7 +5,7 @@ _convert_: 'all'
 d_k: 128 # hidden_size
 _M: 80 # num_other_agents
 c: 10 # num_modes
-T: 30
+T: 16
 L_enc: 2
 dropout: 0.1
 k_attr: 2

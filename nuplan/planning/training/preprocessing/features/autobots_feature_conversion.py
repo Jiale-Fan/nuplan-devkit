@@ -67,9 +67,10 @@ def VectorMapToAutobotsMapTensor(vec_map: VectorMap):
     
     # B=len(vec_map.coords) # get the number of batches
 
-    # TODO: S and P dimension must be bigger than that of the original data
+    # TODO: S and P dimension must be bigger than that of the original data. 
+    # Adapting dimension? 
     S=200 # 100
-    P=300 # 40
+    P=600 # 40
     
     # to debug: check the maximum number of segment contained in one lane
     lengths = [[len(x) for x in sublist] for sublist in vec_map.lane_groupings]
@@ -155,12 +156,10 @@ def output_tensor_to_trajectory(pred_obs: Tensor, mode_probs: Tensor) -> Traject
     """
 
     most_likely_idx=torch.argmax(mode_probs, 1)
-    trajs=pred_obs.cpu()[most_likely_idx,:,:,:]
+    # for each batch, pick the trajectory with largest probability
+    trajs=torch.stack([pred_obs[most_likely_idx[i],:,i,:] for i in range(pred_obs.shape[2])])
 
-    # convert from [1,T,B,5] to [B,T,5]
-    trajs=np.squeeze(trajs)
-    # [T,B,5]
-    batch_list=[ np.squeeze(trajs[:,i,:]) for i in range(trajs.shape[1])]
-    trajs=np.array(batch_list)
+    trajs_3=trajs[:,:,:3]
+    trajs_3[:,:,2] = 1
 
-    return Trajectory(data=trajs)
+    return Trajectory(data=trajs_3)
