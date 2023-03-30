@@ -69,7 +69,7 @@ def VectorMapToAutobotsMapTensor(vec_map: VectorMap):
 
     # TODO: S and P dimension must be bigger than that of the original data. 
     # Adapting dimension? 
-    S=200 # 100
+    S=300 # 100
     P=600 # 40
     
     # to debug: check the maximum number of segment contained in one lane
@@ -77,7 +77,7 @@ def VectorMapToAutobotsMapTensor(vec_map: VectorMap):
     length_maxes=[ np.max(np.array(x)) for x in lengths]
     max_length = np.max(length_maxes)
 
-    padded_list_list = [[np.pad(x.cpu(), (0, max(P - len(x), 0)), 'constant') for x in sublist] for sublist in vec_map.lane_groupings]
+    padded_list_list = [[np.pad(x[:min(P, x.shape[0])].cpu(), (0, max(P - len(x), 0)), 'constant') for x in sublist] for sublist in vec_map.lane_groupings]
     # [TODO]if P < len(x) ??
     # if you experience exception here, it may be the presence of P < len(x). Check max_length and P values.
     list_of_idx_array = [ np.array(l, np.float64) for l in padded_list_list] # l's shape = [num_lane, P]
@@ -86,7 +86,7 @@ def VectorMapToAutobotsMapTensor(vec_map: VectorMap):
     lane_features = [ feature[idx.astype(np.int32)] for idx, feature in zip(list_of_idx_array, list_of_feature_array)]
 
     # ((pad_top, pad_bottom), (pad_left, pad_right))
-    padded_list = [ np.pad(arr, ((0, S-arr.shape[0]), (0, 0), (0, 0)), 'constant')  for arr in lane_features] # get list of array of shape [S, P]
+    padded_list = [ np.pad(arr[:min(S, arr.shape[0]),:,:], ((0, S-arr.shape[0]), (0, 0), (0, 0)), 'constant')  for arr in lane_features] # get list of array of shape [S, P]
 
     map_autobots=np.array(padded_list, np.float64) # map_autobots shape is [B, S, P, 4]
 
@@ -105,13 +105,13 @@ def AgentsToAutobotsAgentsTensor(agents: Agents):
     """
 
     # every scenario may have different number of agents
-    M_minus_1 = 80 # maximum agent number
+    M_minus_1 = 200 # maximum agent number
 
     lengths = [x.shape[1] for x in agents.agents]
     length_maxes=[ np.max(np.array(x)) for x in lengths]
     max_length = np.max(length_maxes)
 
-    padded_list=[ np.pad(arr.cpu(), ((0, 0), (0, max(M_minus_1-arr.shape[1], 0)), (0, 0)), 'constant')  for arr in agents.agents]
+    padded_list=[ np.pad(arr[:,:min(M_minus_1, arr.shape[1]),:].cpu(), ((0, 0), (0, max(M_minus_1-arr.shape[1], 0)), (0, 0)), 'constant')  for arr in agents.agents]
 
     extended_list= [np.expand_dims(x, 0) for x in padded_list]
     
