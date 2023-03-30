@@ -10,6 +10,13 @@ from nuplan.planning.training.preprocessing.feature_builders.autobots_feature_bu
 from nuplan.planning.training.preprocessing.target_builders.ego_trajectory_target_builder import EgoTrajectoryTargetBuilder
 
 from nuplan.planning.simulation.trajectory.trajectory_sampling import TrajectorySampling
+from nuplan.planning.training.preprocessing.feature_builders.vector_map_feature_builder import VectorMapFeatureBuilder
+from nuplan.planning.training.preprocessing.features.agents import Agents
+from nuplan.planning.training.preprocessing.features.vector_map import VectorMap
+from nuplan.planning.training.preprocessing.features.trajectory import Trajectory
+from nuplan.planning.training.preprocessing.feature_builders.agents_feature_builder import AgentsFeatureBuilder
+import nuplan.planning.training.preprocessing.features.autobots_feature_conversion as autobots_conv
+from nuplan.planning.training.modeling.types import FeaturesType, TargetsType
 
 from typing import List, Optional, cast
 # from context_encoders import MapEncoderCNN, MapEncoderPts
@@ -91,16 +98,28 @@ class AutoBotEgo(TorchModuleWrapper):
         ):
 
         
+        # super().__init__(
+        #     feature_builders=[
+        #         AutobotsMapFeatureBuilder(
+        #             radius=vector_map_feature_radius,
+        #             connection_scales=vector_map_connection_scales,
+        #         ),
+        #         AutobotsAgentsFeatureBuilder(trajectory_sampling=past_trajectory_sampling),
+        #     ],
+        #     target_builders=[AutobotsTargetBuilder(future_trajectory_sampling=future_trajectory_sampling),
+        #     EgoTrajectoryTargetBuilder(future_trajectory_sampling=future_trajectory_sampling)],
+        #     future_trajectory_sampling=future_trajectory_sampling,
+        # )
+
         super().__init__(
             feature_builders=[
-                AutobotsMapFeatureBuilder(
+                VectorMapFeatureBuilder(
                     radius=vector_map_feature_radius,
                     connection_scales=vector_map_connection_scales,
                 ),
-                AutobotsAgentsFeatureBuilder(trajectory_sampling=past_trajectory_sampling),
+                AgentsFeatureBuilder(trajectory_sampling=past_trajectory_sampling),
             ],
-            target_builders=[AutobotsTargetBuilder(future_trajectory_sampling=future_trajectory_sampling),
-            EgoTrajectoryTargetBuilder(future_trajectory_sampling=future_trajectory_sampling)],
+            target_builders=[EgoTrajectoryTargetBuilder(future_trajectory_sampling=future_trajectory_sampling)],
             future_trajectory_sampling=future_trajectory_sampling,
         )
 
@@ -234,7 +253,25 @@ class AutoBotEgo(TorchModuleWrapper):
         agents_soc_emb = agents_soc_emb.view(self._M+1, B, T_obs, -1).permute(2, 1, 0, 3)
         return agents_soc_emb
 
-    def forward(self, ego_in: Tensor, agents_in: Tensor, roads: Tensor):
+    def forward(self, features: FeaturesType) -> TargetsType:
+        """
+        Predict
+        :param features: input features containing
+                        {
+                            "vector_map": VectorMap,
+                            "agents": Agents,
+                        }
+        :return: targets: predictions from network
+                        {
+                            "trajectory": Trajectory,
+                        }
+        """
+        vector_map_data = cast(VectorMap, features["vector_map"])
+        ego_agent_features = cast(Agents, features["agents"])
+
+        roads=autobots_conv.VectorMapToAutobotsMapTensor(vector_map_data)
+        agents_in=autobots_conv.AgentsToAutobotsAgentsTensor(ego_agent_features)
+        ego_in=autobots_conv.AgentsToAutobotsEgoinTensor(ego_agent_features)
         '''
         :param ego_in: [B, T_obs, k_attr+1] with last values being the existence mask. 
         :param agents_in: [B, T_obs, M-1, k_attr+1] with last values being the existence mask.
@@ -302,6 +339,10 @@ class AutoBotEgo(TorchModuleWrapper):
                                                  key_padding_mask=orig_road_segs_masks)[0] + mode_params_emb
         mode_probs = F.softmax(self.prob_predictor(mode_params_emb).squeeze(-1), dim=0).transpose(0, 1)
 
+        traj=autobots_conv.output_tensor_to_trajectory(out_dists, mode_probs)
+
         # return  [c, T, B, 5], [B, c]
-        return out_dists, mode_probs
+        # return out_dists, mode_probs
+
+        return {"trajectory": Trajectory(data=traj), "mode_probs": mode_probs, "pred": out_dists}
 

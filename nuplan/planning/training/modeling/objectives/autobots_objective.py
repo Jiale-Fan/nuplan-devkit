@@ -35,7 +35,7 @@ class AutobotsObjective(AbstractObjective):
 
     def get_list_of_required_target_types(self) -> List[str]:
         """Implemented. See interface."""
-        return ["tensor_trajectory"]
+        return ["pred", "mode_probs"]
 
     def compute(self, predictions: FeaturesType, targets: TargetsType, scenarios: ScenarioListType) -> torch.Tensor:
         """
