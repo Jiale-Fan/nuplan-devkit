@@ -6,7 +6,7 @@ from omegaconf import DictConfig
 import tempfile
 
 
-def visualize(sim_dict: dict) -> str:
+def train_autobots(sim_dict: dict) -> str:
     # Location of path with all simulation configs
     CONFIG_PATH = sim_dict['CONFIG_PATH']
     CONFIG_NAME = sim_dict['CONFIG_NAME']
@@ -70,10 +70,10 @@ if __name__ == '__main__':
             
             # Training params
             PY_FUNC = 'train', # ['train','test','cache', *'build_only'*]
-            SCENARIO_BUILDER = 'nuplan_mini', # ['nuplan','nuplan_challenge','nuplan_mini']
-            SCENARIO_SELECTION = 100,
-            MAX_EPOCHS = 1,
-            BATCH_SIZE = 2,
+            SCENARIO_BUILDER = 'nuplan', # ['nuplan','nuplan_challenge','nuplan_mini']
+            SCENARIO_SELECTION = 37500,
+            MAX_EPOCHS = 25,
+            BATCH_SIZE = 8,
             
             # add save directory
             SAVE_DIR = '/data1/nuplan/jiale/exp'
@@ -81,4 +81,4 @@ if __name__ == '__main__':
     )
     
     for train_dict in train_dicts:
-        visualize(train_dict)
+        train_autobots(train_dict)
