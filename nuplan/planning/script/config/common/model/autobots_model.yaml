@@ -3,7 +3,7 @@ _convert_: 'all'
 
 # Model setup
 d_k: 128 # hidden_size
-_M: 80 # num_other_agents
+_M: 100 # num_other_agents
 c: 10 # num_modes
 T: 16
 L_enc: 2

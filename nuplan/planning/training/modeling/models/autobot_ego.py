@@ -15,7 +15,7 @@ from nuplan.planning.training.preprocessing.features.agents import Agents
 from nuplan.planning.training.preprocessing.features.vector_map import VectorMap
 from nuplan.planning.training.preprocessing.features.tensor_target import TensorTarget
 from nuplan.planning.training.preprocessing.feature_builders.agents_feature_builder import AgentsFeatureBuilder
-import nuplan.planning.training.preprocessing.features.autobots_feature_conversion as autobots_conv
+from nuplan.planning.training.preprocessing.features.autobots_feature_conversion import NuplanToAutobotsConverter
 from nuplan.planning.training.modeling.types import FeaturesType, TargetsType
 
 from typing import List, Optional, cast
@@ -141,6 +141,8 @@ class AutoBotEgo(TorchModuleWrapper):
         self.tx_hidden_size = tx_hidden_size
         self.use_map_img = use_map_img
         self.use_map_lanes = use_map_lanes
+
+        self.converter = NuplanToAutobotsConverter(_M=_M)
 
         # INPUT ENCODERS
         self.agents_dynamic_encoder = nn.Sequential(init_(nn.Linear(k_attr, d_k)))
@@ -273,9 +275,9 @@ class AutoBotEgo(TorchModuleWrapper):
         vector_map_data = cast(VectorMap, features["vector_map"])
         ego_agent_features = cast(Agents, features["agents"])
 
-        roads=autobots_conv.VectorMapToAutobotsMapTensor(vector_map_data)
-        agents_in=autobots_conv.AgentsToAutobotsAgentsTensor(ego_agent_features)
-        ego_in=autobots_conv.AgentsToAutobotsEgoinTensor(ego_agent_features)
+        roads=self.converter.VectorMapToAutobotsMapTensor(vector_map_data)
+        agents_in=self.converter.AgentsToAutobotsAgentsTensor(ego_agent_features)
+        ego_in=self.converter.AgentsToAutobotsEgoinTensor(ego_agent_features)
         '''
         :param ego_in: [B, T_obs, k_attr+1] with last values being the existence mask. 
         :param agents_in: [B, T_obs, M-1, k_attr+1] with last values being the existence mask.
@@ -343,7 +345,7 @@ class AutoBotEgo(TorchModuleWrapper):
                                                  key_padding_mask=orig_road_segs_masks)[0] + mode_params_emb
         mode_probs = F.softmax(self.prob_predictor(mode_params_emb).squeeze(-1), dim=0).transpose(0, 1)
 
-        traj=autobots_conv.output_tensor_to_trajectory(out_dists, mode_probs)
+        traj=self.converter.output_tensor_to_trajectory(out_dists, mode_probs)
 
         # return  [c, T, B, 5], [B, c]
         # return out_dists, mode_probs
