@@ -5,6 +5,8 @@ from nuplan.planning.script.run_training import main as main_train
 from omegaconf import DictConfig
 import tempfile
 
+# to run tensorboard:
+# tensorboard --logdir=/data1/nuplan/jiale/exp/autobots_experiment/autobots_model
 
 def train_autobots(sim_dict: dict) -> str:
     # Location of path with all simulation configs

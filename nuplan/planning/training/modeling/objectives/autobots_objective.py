@@ -36,7 +36,7 @@ class AutobotsObjective(AbstractObjective):
 
     def get_list_of_required_target_types(self) -> List[str]:
         """Implemented. See interface."""
-        return ["pred", "mode_probs"]
+        return ["trajectory"]
 
     def compute(self, predictions: FeaturesType, targets: TargetsType, scenarios: ScenarioListType) -> torch.Tensor:
         """
@@ -51,7 +51,7 @@ class AutobotsObjective(AbstractObjective):
 
         pred_obs = cast(TensorTarget, predictions["pred"]).data
         mode_probs = cast(TensorTarget, predictions["mode_probs"]).data
-        targets_xy = cast(Trajectory, predictions["trajectory"]).data
+        targets_xy = cast(Trajectory, targets["trajectory"]).data
         
 
         nll_loss, kl_loss, post_entropy, adefde_loss = nll_loss_multimodes(pred_obs, targets_xy[:, :, :2], mode_probs,
@@ -61,5 +61,7 @@ class AutobotsObjective(AbstractObjective):
 
         total_loss=nll_loss + adefde_loss + kl_loss
         # how to implement the gradient clip?
+
+        # nll_loss: 
 
         return total_loss

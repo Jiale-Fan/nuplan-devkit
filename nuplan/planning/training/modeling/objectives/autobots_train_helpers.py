@@ -31,6 +31,12 @@ def get_Laplace_dist(pred):
 
 
 def nll_pytorch_dist(pred, data, rtn_loss=True):
+    """
+
+    pred: [B, T, 5], bivariant Gaussian distributions
+    data: [B, T, 2], samples
+
+    """
     # biv_gauss_dist = get_BVG_distributions(pred)
     biv_gauss_dist = get_Laplace_dist(pred)
     if rtn_loss:
@@ -45,23 +51,23 @@ def nll_loss_multimodes(pred, data, modes_pred, entropy_weight=1.0, kl_weight=1.
     """NLL loss multimodes for training. MFP Loss function
     Args:
       pred: [K, T, B, 5]
-      data: [B, T, 5]
+      data: [B, T, 5] # should be [B, T, 2], ground truth
       modes_pred: [B, K], prior prob over modes
       noise is optional
     """
-    modes = len(pred)
-    nSteps, batch_sz, dim = pred[0].shape
+    modes = len(pred) # K in comments, or C in paper
+    nSteps, batch_sz, dim = pred[0].shape # T, B, 5
 
     # compute posterior probability based on predicted prior and likelihood of predicted trajectory.
-    log_lik = np.zeros((batch_sz, modes))
+    log_lik = np.zeros((batch_sz, modes)) # [B, c]
     with torch.no_grad():
         for kk in range(modes):
-            nll = nll_pytorch_dist(pred[kk].transpose(0, 1), data, rtn_loss=False)
-            log_lik[:, kk] = -nll.cpu().numpy()
+            nll = nll_pytorch_dist(pred[kk].transpose(0, 1), data, rtn_loss=False) # pred[kk].transpose(0, 1): [B, T, 5], data: [B, T, 2]
+            log_lik[:, kk] = -nll.cpu().numpy() # update one mode of all batches' log likelihood
 
-    priors = modes_pred.detach().cpu().numpy()
-    log_posterior_unnorm = log_lik + np.log(priors)
-    log_posterior = log_posterior_unnorm - special.logsumexp(log_posterior_unnorm, axis=-1).reshape((batch_sz, -1))
+    priors = modes_pred.detach().cpu().numpy() # priors won't be performed gradient on
+    log_posterior_unnorm = log_lik + np.log(priors) # [B, c]
+    log_posterior = log_posterior_unnorm - special.logsumexp(log_posterior_unnorm, axis=-1).reshape((batch_sz, -1)) # normalize the posterior probability
     post_pr = np.exp(log_posterior)
     post_pr = torch.tensor(post_pr).float().to(data.device)
     post_entropy = torch.mean(D.Categorical(post_pr).entropy()).item()
@@ -77,7 +83,7 @@ def nll_loss_multimodes(pred, data, modes_pred, entropy_weight=1.0, kl_weight=1.
     for kk in range(modes):
         entropy_vals.append(get_BVG_distributions(pred[kk]).entropy())
     entropy_vals = torch.stack(entropy_vals).permute(2, 0, 1)
-    entropy_loss = torch.mean((entropy_vals).sum(2).max(1)[0])
+    entropy_loss = torch.mean((entropy_vals).sum(2).max(1)[0]) # take the max entropy
     loss += entropy_weight * entropy_loss
 
     # KL divergence between the prior and the posterior distributions.
