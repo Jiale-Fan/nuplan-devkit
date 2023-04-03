@@ -71,21 +71,24 @@ class NuplanToAutobotsConverter:
         # Adapting dimension? 
         
         # to debug: check the maximum number of segment contained in one lane
-        lengths = [[len(x) for x in sublist] for sublist in vec_map.lane_groupings]
-        length_maxes = [torch.max(torch.tensor(x)) for x in lengths]
-        max_p_num = torch.max(torch.tensor(length_maxes))
+
+        # lengths = [[len(x) for x in sublist] for sublist in vec_map.lane_groupings]
+        # length_maxes = [torch.max(torch.tensor(x)) for x in lengths]
+        # max_p_num = torch.max(torch.tensor(length_maxes))
 
         # pad the lane_groupings
         # padded_list_list = [[torch.nn.functional.pad(x, (0, max(P - len(x), 0)), 'constant', 0) for x in sublist] for sublist in vec_map.lane_groupings]
         list_idx = [torch.nn.utils.rnn.pad_sequence(sublist, batch_first=True) for sublist in vec_map.lane_groupings]
         # list_idx shape = List[Tensor[num_lane(varies), max_p_num(varies)]] 
-        padded_list_idx = [torch.nn.functional.pad(x[:, :min(x.shape[1], self.P)], (0, max(self.P-x.shape[1], 0)), 'constant', 0) for x in list_idx] # map_autobots shape is [B, S, P, 4]
+        padded_list_idx = [torch.nn.functional.pad(x[:, :min(x.shape[1], self.P)], (0, max(self.P-x.shape[1], 0)), 'constant', 0) for x in list_idx]
         # list_idx shape = List[Tensor[num_lane(varies), P]]
 
         list_of_feature_array = [ self.coords_to_map_attr(coord_mat) for coord_mat in vec_map.coords]
+        # list_of_feature_array shape : List[Tensor [num_segment(varies), 4]]
 
-        lane_features = [ feature[idx.long()] for idx, feature in zip(padded_list_idx, list_of_feature_array)]  # List[Tensor(num_lane, P, 4)]
-        lane_features_tensor = torch.nn.utils.rnn.pad_sequence(lane_features, batch_first=True) # Tensor(B, num_lane, num_p, 4)
+
+        lane_features = [ feature[idx.long()] for idx, feature in zip(padded_list_idx, list_of_feature_array)]  # List[Tensor(num_lane(varies), P, 4)]
+        lane_features_tensor = torch.nn.utils.rnn.pad_sequence(lane_features, batch_first=True) # Tensor(B, num_lane(varies), P, 4)
 
         lf_shape=lane_features_tensor.shape
         map_autobots =  torch.nn.functional.pad(lane_features_tensor[:, :min(lf_shape[1], self.S), :, :], (0, 0, 0, 0, 0, max(self.S-lf_shape[1], 0)), 'constant', 0) # map_autobots shape is [B, S, P, 4]
@@ -118,12 +121,12 @@ class NuplanToAutobotsConverter:
 
         # every scenario may have different number of agents
 
-        lengths = [x.shape[1] for x in agents.agents]
-        length_maxes = [torch.max(torch.tensor(x)) for x in lengths]
-        max_length = torch.max(torch.tensor(length_maxes))
+        # lengths = [x.shape[1] for x in agents.agents]
+        # length_maxes = [torch.max(torch.tensor(x)) for x in lengths]
+        # max_length = torch.max(torch.tensor(length_maxes))
 
         # agents.agents: List[Tensor[T_obs, num_agents(varies), 8]]
-        padded_list = [torch.nn.functional.pad(x, (0, 0, 0, max(self._M - x.shape[1],0)), 'constant') for x in agents.agents]
+        padded_list = [torch.nn.functional.pad(x[:,:min(self._M, x.shape[1]),:], (0, 0, 0, max(self._M - x.shape[1],0)), 'constant') for x in agents.agents]
         # padded_list: List[Tensor[T_obs, M-1, 8]]
         
         agents_ts = torch.stack(padded_list)
@@ -170,7 +173,7 @@ class NuplanToAutobotsConverter:
      
     @torch.jit.unused
     def output_tensor_to_trajectory( self, pred_obs: Tensor, mode_probs: Tensor) -> Trajectory:
-        """_summary_
+        """take the trajectory with maximum probability
 
         Args:
             pred_obs: shape [c, T, B, 5] c trajectories for the ego agents with every point being the params of
@@ -183,6 +186,6 @@ class NuplanToAutobotsConverter:
         trajs=torch.stack([pred_obs[most_likely_idx[i],:,i,:] for i in range(pred_obs.shape[2])])
 
         trajs_3=trajs[:,:,:3]
-        trajs_3[:,:,2] = 1
+        trajs_3[:,:,2] = 0
 
         return Trajectory(data=trajs_3)
