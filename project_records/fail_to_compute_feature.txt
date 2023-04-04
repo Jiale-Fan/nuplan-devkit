@@ -128,5 +128,10 @@ Traceback (most recent call last):
     features, targets, _ = self._feature_preprocessor.compute_features(scenario)
   File "/home/jiale/Documents/master/nuplan-devkit/nuplan/planning/training/preprocessing/feature_preprocessor.py", line 106, in compute_features
     raise RuntimeError(msg)
+    
 RuntimeError: Failed to compute features for scenario token f35c81eeb76759fc in log 2021.08.20.18.15.01_veh-28_00016_00436
+
+Failed to compute features for scenario token 41b90e1b673a5e81 in log 2021.09.14.16.12.
+27_veh-28_00388_00575
+
 Error: Ran out of input

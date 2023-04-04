@@ -20,7 +20,7 @@ defaults:
   - warm_up_lr_scheduler: null  # [linear_warm_up, constant_warm_up] supported warm up lr schedulers
 
   # Data Loading
-  - data_loader: default_data_loader
+  - data_loader: autobots_data_loader
   - splitter: ???
 
   # Objectives and metrics

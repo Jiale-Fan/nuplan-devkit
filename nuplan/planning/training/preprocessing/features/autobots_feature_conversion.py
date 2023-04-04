@@ -160,6 +160,9 @@ class NuplanToAutobotsConverter:
         """
 
         ego_in=torch.stack(agents.ego)
+        # if ego_in.dim == 2:
+        #     ego_in=torch.unsqueeze(ego_in, 0) # if two dimension, unsqueeze to create one more "batch" dimension
+
         ego_in[:,:,2]=1
         return ego_in
 
