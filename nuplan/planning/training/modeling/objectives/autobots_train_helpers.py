@@ -2,7 +2,7 @@ import torch
 from scipy import special
 import numpy as np
 import torch.distributions as D
-from torch.distributions import MultivariateNormal, Laplace
+from torch.distributions import MultivariateNormal, Laplace, VonMises
 
 
 # ==================================== AUTOBOT-EGO STUFF ====================================
@@ -33,25 +33,47 @@ def get_Laplace_dist(pred):
 def nll_pytorch_dist(pred, data, rtn_loss=True):
     """
 
-    pred: [B, T, 5], bivariant Gaussian distributions
-    data: [B, T, 2], samples
+    pred: [B, T, 6], Laplace distributions and VonMises distribution
+    data: [B, T, 3], samples
 
     """
-    # biv_gauss_dist = get_BVG_distributions(pred)
-    biv_gauss_dist = get_Laplace_dist(pred)
-    if rtn_loss:
-        # return (-biv_gauss_dist.log_prob(data)).sum(1)  # Gauss
-        return (-biv_gauss_dist.log_prob(data)).sum(-1).sum(1)  # Laplace
+    # if coorporate direction:
+
+    state_dim = data.shape[-1]
+
+    if state_dim==3:
+        biv_gauss_dist = get_Laplace_dist(pred[:,:,:4])
+
+        pr=VonMises(pred[:,:,4], pred[:,:,5]).log_prob(data[:,:,-1]).unsqueeze(-1)
+        probs=torch.cat((-biv_gauss_dist.log_prob(data[:,:,:2]), -pr), -1)
+        if rtn_loss:
+            # return (-biv_gauss_dist.log_prob(data)).sum(1)  # Gauss
+            return probs.sum(-1).sum(1)  # Laplace
+        else:
+            # return (-biv_gauss_dist.log_prob(data)).sum(-1)  # Gauss
+            return probs.sum(dim=(1, 2))  # Laplace
+
+    elif state_dim==2:
+
+        # biv_gauss_dist = get_BVG_distributions(pred)
+        biv_gauss_dist = get_Laplace_dist(pred)
+        if rtn_loss:
+            # return (-biv_gauss_dist.log_prob(data)).sum(1)  # Gauss
+            return (-biv_gauss_dist.log_prob(data)).sum(-1).sum(1)  # Laplace
+        else:
+            # return (-biv_gauss_dist.log_prob(data)).sum(-1)  # Gauss
+            return (-biv_gauss_dist.log_prob(data)).sum(dim=(1, 2))  # Laplace
     else:
-        # return (-biv_gauss_dist.log_prob(data)).sum(-1)  # Gauss
-        return (-biv_gauss_dist.log_prob(data)).sum(dim=(1, 2))  # Laplace
+        raise RuntimeError(
+                f'Invalid trajectory state dimension. Expected 2 or 3 variables per state, got {state_dim}.'
+            )
 
 
 def nll_loss_multimodes(pred, data, modes_pred, entropy_weight=1.0, kl_weight=1.0, use_FDEADE_aux_loss=True):
     """NLL loss multimodes for training. MFP Loss function
     Args:
-      pred: [K, T, B, 5]
-      data: [B, T, 5] # should be [B, T, 2], ground truth
+      pred: [K, T, B, 6]
+      data: [B, T, 3] 
       modes_pred: [B, K], prior prob over modes
       noise is optional
     """
@@ -81,7 +103,8 @@ def nll_loss_multimodes(pred, data, modes_pred, entropy_weight=1.0, kl_weight=1.
     # Adding entropy loss term to ensure that individual predictions do not try to cover multiple modes.
     entropy_vals = []
     for kk in range(modes):
-        entropy_vals.append(get_BVG_distributions(pred[kk]).entropy())
+        # entropy_vals.append(get_BVG_distributions(pred[kk][:,:,:,:5]).entropy())
+        entropy_vals.append(get_Laplace_dist(pred[kk,:,:,:4]).entropy().sum(-1))
     entropy_vals = torch.stack(entropy_vals).permute(2, 0, 1)
     entropy_loss = torch.mean((entropy_vals).sum(2).max(1)[0]) # take the max entropy
     loss += entropy_weight * entropy_loss
@@ -100,10 +123,35 @@ def nll_loss_multimodes(pred, data, modes_pred, entropy_weight=1.0, kl_weight=1.
 
 
 def l2_loss_fde(pred, data):
-    fde_loss = torch.norm((pred[:, -1, :, :2].transpose(0, 1) - data[:, -1, :2].unsqueeze(1)), 2, dim=-1)
-    ade_loss = torch.norm((pred[:, :, :, :2].transpose(1, 2) - data[:, :, :2].unsqueeze(0)), 2, dim=-1).mean(dim=2).transpose(0, 1)
-    loss, min_inds = (fde_loss + ade_loss).min(dim=1)
-    return 100.0 * loss.mean()
+    """
+        pred: [K, T, B, 6]
+        data: [B, T, 3] 
+    """
+    state_dim=data.shape[-1]
+    if state_dim==2:
+        fde_loss = torch.norm((pred[:, -1, :, :2].transpose(0, 1) - data[:, -1, :2].unsqueeze(1)), 2, dim=-1)
+        ade_loss = torch.norm((pred[:, :, :, :2].transpose(1, 2) - data[:, :, :2].unsqueeze(0)), 2, dim=-1).mean(dim=2).transpose(0, 1)
+        loss, min_inds = (fde_loss + ade_loss).min(dim=1)
+        return 100.0 * loss.mean()
+    elif state_dim==3:
+        f_angle = torch.stack((torch.cos(data[:, -1, 2].unsqueeze(-1)),
+             torch.sin(data[:, -1, 2].unsqueeze(-1))), -1)
+        fde_loss_angle = torch.norm(torch.stack((torch.cos(pred[:, -1, :, 4].transpose(0, 1)),
+             torch.sin(pred[:, -1, :, 4].transpose(0, 1))), dim=-1) - f_angle, 2, dim=-1)
+
+        a_angle = torch.stack((torch.cos(data[:, :, 2].unsqueeze(-1)),
+             torch.sin(data[:, :, 2].unsqueeze(-1))), -1).transpose(1,2)
+        ade_loss_angle = torch.norm(torch.stack((torch.cos(pred[:, :, :, 4].transpose(1, 2)),
+             torch.sin(pred[:, :, :, 4].transpose(1, 2))), dim=-1).transpose(0,1) - a_angle, 2, dim=-1).mean(dim=2)
+        
+        fde_loss = torch.norm((pred[:, -1, :, :2].transpose(0, 1) - data[:, -1, :2].unsqueeze(1)), 2, dim=-1)
+        ade_loss = torch.norm((pred[:, :, :, :2].transpose(1, 2) - data[:, :, :2].unsqueeze(0)), 2, dim=-1).mean(dim=2).transpose(0, 1)
+        loss, min_inds = (fde_loss + ade_loss+ fde_loss_angle+ade_loss_angle).min(dim=1) # [B,K]
+        return 100.0 * loss.mean()
+    else:
+        raise RuntimeError(
+                f'Invalid trajectory state dimension. Expected 2 or 3 variables per state, got {state_dim}.'
+            )
 
 
 # ==================================== AUTOBOT-JOINT STUFF ====================================

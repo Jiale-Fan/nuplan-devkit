@@ -27,6 +27,7 @@ def loadSample():
     with open(file_name, 'rb') as file:
         datainput=pickle.load(file)
         print(f'Object successfully loaded to "{file_name}"')
+    return datainput
 
 def testMap(datainput):
 
@@ -46,7 +47,7 @@ def testAgents(datainput):
 
 def testTrajectory(datainput):
     # fb=AutobotsTargetBuilder(TrajectorySampling(num_poses=10, time_horizon=5.0))
-
+    datainput=loadSample()
     ag=datainput[1]['trajectory']
 
     ts=NuplanToAutobotsConverter.TrajectoryToAutobotsEgoin(ag)
@@ -102,7 +103,7 @@ def group2():
     print("done")
 
 
-def group3():
+# def group3():
 #     import traceback
 
 # try:
@@ -115,4 +116,4 @@ def group3():
 #     traceback.print_tb(e.__traceback__)
 
 
-group2()
+group1()

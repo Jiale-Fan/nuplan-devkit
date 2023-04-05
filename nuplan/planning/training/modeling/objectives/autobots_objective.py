@@ -11,6 +11,8 @@ from nuplan.planning.training.preprocessing.features.trajectory import Trajector
 from nuplan.planning.training.modeling.objectives.autobots_train_helpers import nll_loss_multimodes, nll_loss_multimodes_joint
 from torch import Tensor
 
+import numpy as np
+
 class AutobotsObjective(AbstractObjective):
     """
     Autobots ego objective
@@ -51,10 +53,11 @@ class AutobotsObjective(AbstractObjective):
 
         pred_obs = cast(TensorTarget, predictions["pred"]).data
         mode_probs = cast(TensorTarget, predictions["mode_probs"]).data
-        targets_xy = cast(Trajectory, targets["trajectory"]).data
-        
+        targets_xytheta = cast(Trajectory, targets["trajectory"]).data
 
-        nll_loss, kl_loss, post_entropy, adefde_loss = nll_loss_multimodes(pred_obs, targets_xy[:, :, :2], mode_probs,
+        targets_xytheta[:,-1] %= 2*np.pi
+
+        nll_loss, kl_loss, post_entropy, adefde_loss = nll_loss_multimodes(pred_obs, targets_xytheta, mode_probs,
                                                                                    entropy_weight=self.entropy_weight,
                                                                                    kl_weight=self.kl_weight,
                                                                                    use_FDEADE_aux_loss=self.use_FDEADE_aux_loss)

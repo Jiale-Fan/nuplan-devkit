@@ -76,8 +76,9 @@ if __name__ == '__main__':
             # Training params
             PY_FUNC = 'train', # ['train','test','cache', *'build_only'*]
             SCENARIO_BUILDER = 'nuplan', # ['nuplan','nuplan_challenge','nuplan_mini']
+
             SCENARIO_SELECTION = 37500,
-            MAX_EPOCHS = 10,
+            MAX_EPOCHS = 20,
             BATCH_SIZE = 32,
 
             # SCENARIO_SELECTION = 100,
