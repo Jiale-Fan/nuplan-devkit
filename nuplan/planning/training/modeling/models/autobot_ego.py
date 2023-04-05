@@ -224,7 +224,7 @@ class AutoBotEgo(TorchModuleWrapper):
         env_masks = env_masks.unsqueeze(1).repeat(1, self.c, 1).view(ego.shape[0] * self.c, -1)
 
         # Agents stuff
-        agents=agents.cuda()
+        # agents=agents.cuda()
         temp_masks = torch.cat((torch.ones_like(env_masks_orig.unsqueeze(-1)), agents[:, :, :, -1]), dim=-1)
         opps_masks = (1.0 - temp_masks).type(torch.BoolTensor).to(agents.device)  # only for agents.
         opps_tensor = agents[:, :, :, :self.k_attr]  # only opponent states
@@ -270,6 +270,8 @@ class AutoBotEgo(TorchModuleWrapper):
         :return: targets: predictions from network
                         {
                             "trajectory": Trajectory,
+                            "mode_probs": TensorTarget(data=mode_probs), 
+                            "pred": TensorTarget(data=out_dists)
                         }
         """
         vector_map_data = cast(VectorMap, features["vector_map"])

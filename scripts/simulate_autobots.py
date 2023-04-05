@@ -4,6 +4,7 @@ import hydra
 from nuplan.planning.script.run_simulation import main as main_simulation
 from nuplan.planning.script.run_nuboard import main as main_nuboard
 from omegaconf import DictConfig
+import warnings
 
 
 def simulate(sim_dict: dict) -> str:
@@ -48,7 +49,8 @@ def simulate(sim_dict: dict) -> str:
         
         MODEL = sim_dict['MODEL']
         
-        LOG_DIR = str(Path(SAVE_DIR) / '..' / 'training' / EXPERIMENT / MODEL)
+        # LOG_DIR = str(Path(SAVE_DIR) / '..' / 'training' / EXPERIMENT / MODEL)
+        LOG_DIR = str(Path(SAVE_DIR) / '..' / EXPERIMENT / MODEL)
         print(LOG_DIR)
 
         # Get the checkpoint of the trained model
@@ -63,6 +65,9 @@ def simulate(sim_dict: dict) -> str:
         checkpoint = sorted((train_experiment_dir / 'checkpoints').iterdir())[-1]  # get last checkpoint
         
         MODEL_PATH = str(checkpoint).replace("=", "\=")
+
+        print("Model path is: ")
+        print(MODEL_PATH)
 
         
         # Compose the configuration
@@ -106,89 +111,9 @@ def open_nuboard(simulation_folders: list[str]) -> None:
     
     
 if __name__ == '__main__':
+    warnings.filterwarnings("ignore", category=RuntimeWarning)
     sim_dicts = []
-    # # Simple Planner
-    # sim_dicts.append(
-    #     dict(
-    #         # Location of path with all simulation configs
-    #         CONFIG_PATH = '../nuplan/planning/script/config/simulation',
-    #         CONFIG_NAME = 'default_simulation',
-
-    #         # Select the planner and simulation challenge
-    #         PLANNER = 'simple_planner',  # [simple_planner, ml_planner]
-    #         CHALLENGE = 'open_loop_boxes',  # [open_loop_boxes, closed_loop_nonreactive_agents, closed_loop_reactive_agents]
-    #         DATASET_PARAMS = [
-    #             'scenario_builder=nuplan_mini',  # use nuplan mini database
-    #             'scenario_filter=all_scenarios',  # initially select all scenarios in the database
-    #             'scenario_filter.scenario_types=[near_multiple_vehicles, on_pickup_dropoff, starting_unprotected_cross_turn, high_magnitude_jerk]',  # select scenario types
-    #             'scenario_filter.num_scenarios_per_type=10',  # use 10 scenarios per scenario type
-    #         ],
-        
-    #         # Name of the experiment
-    #         EXPERIMENT = 'simulation_simple_experiment',
-
-    #         # add save directory
-    #         SAVE_DIR = '/data1/nuplan/exp/exp/simulation',
-            
-    #         # for ML Planner only
-    #         MODEL = None
-    #     )
-    # )
-    # # Raster Model
-    # sim_dicts.append(
-    #     dict(
-    #         # Location of path with all simulation configs
-    #         CONFIG_PATH = '../nuplan/planning/script/config/simulation',
-    #         CONFIG_NAME = 'default_simulation',
-
-    #         # Select the planner and simulation challenge
-    #         PLANNER = 'ml_planner',  # [simple_planner, ml_planner]
-    #         CHALLENGE = 'open_loop_boxes',  # [open_loop_boxes, closed_loop_nonreactive_agents, closed_loop_reactive_agents]
-    #         DATASET_PARAMS = [
-    #             'scenario_builder=nuplan_mini',  # use nuplan mini database
-    #             'scenario_filter=all_scenarios',  # initially select all scenarios in the database
-    #             'scenario_filter.scenario_types=[near_multiple_vehicles, on_pickup_dropoff, starting_unprotected_cross_turn, high_magnitude_jerk]',  # select scenario types
-    #             'scenario_filter.num_scenarios_per_type=10',  # use 10 scenarios per scenario type
-    #         ],
-        
-    #         # Name of the experiment
-    #         EXPERIMENT = 'raster_experiment',
-            
-    #         # add save directory
-    #         SAVE_DIR = '/data1/nuplan/exp/exp/simulation',
-            
-    #         # for ML Planner only
-    #         MODEL = 'raster_model'
-    #     )
-    # )
-    # # Simple Vector Model
-    # sim_dicts.append(
-    #     dict(
-    #         # Location of path with all simulation configs
-    #         CONFIG_PATH = '../nuplan/planning/script/config/simulation',
-    #         CONFIG_NAME = 'default_simulation',
-
-    #         # Select the planner and simulation challenge
-    #         PLANNER = 'ml_planner',  # [simple_planner, ml_planner]
-    #         CHALLENGE = 'open_loop_boxes',  # [open_loop_boxes, closed_loop_nonreactive_agents, closed_loop_reactive_agents]
-    #         DATASET_PARAMS = [
-    #             'scenario_builder=nuplan_mini',  # use nuplan mini database
-    #             'scenario_filter=all_scenarios',  # initially select all scenarios in the database
-    #             'scenario_filter.scenario_types=[near_multiple_vehicles, on_pickup_dropoff, starting_unprotected_cross_turn, high_magnitude_jerk]',  # select scenario types
-    #             'scenario_filter.num_scenarios_per_type=10',  # use 10 scenarios per scenario type
-    #         ],
-        
-    #         # Name of the experiment
-    #         EXPERIMENT = 'simple_vector_experiment',
-            
-    #         # add save directory
-    #         SAVE_DIR = '/data1/nuplan/exp/exp/simulation',
-            
-    #         # for ML Planner only
-    #         MODEL = 'simple_vector_model'
-    #     )
-    # )
-    # Vector Model
+    
     sim_dicts.append(
         dict(
             # Location of path with all simulation configs
@@ -206,15 +131,17 @@ if __name__ == '__main__':
             ],
         
             # Name of the experiment
-            EXPERIMENT = 'vector_experiment',
+            EXPERIMENT = 'autobots_experiment',
             
             # add save directory
             SAVE_DIR = '/data1/nuplan/jiale/exp/simulation',
             
             # for ML Planner only
-            MODEL = 'vector_model'
+            MODEL = 'autobots_model'
         )
+        
     )
+   
     
     simulation_folders = []
     for sim_dict in sim_dicts:
@@ -224,4 +151,8 @@ if __name__ == '__main__':
     open_nuboard(simulation_folders)
     
 
-    
+    """
+    conda activate nuplan
+cd ~/Documents/master/nuplan-devkit
+python ./scripts/simulate_autobots.py 
+    """
