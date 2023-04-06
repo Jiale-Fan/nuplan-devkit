@@ -55,7 +55,7 @@ class AutobotsObjective(AbstractObjective):
         mode_probs = cast(TensorTarget, predictions["mode_probs"]).data
         targets_xytheta = cast(Trajectory, targets["trajectory"]).data
 
-        targets_xytheta[:,-1] %= 2*np.pi
+        targets_xytheta[:,-1] = targets_xytheta[:,-1]%(2*np.pi)
 
         nll_loss, kl_loss, post_entropy, adefde_loss = nll_loss_multimodes(pred_obs, targets_xytheta, mode_probs,
                                                                                    entropy_weight=self.entropy_weight,

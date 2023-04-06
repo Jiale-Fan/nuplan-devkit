@@ -1,4 +1,4 @@
-autobots_nll_loss:
+autobots_post_entropy:
   _target_: nuplan.planning.training.modeling.metrics.autobots_metrics.AutobotsPostEntropy
   _convert_: 'all'
 

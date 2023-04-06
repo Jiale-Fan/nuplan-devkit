@@ -32,10 +32,18 @@ def get_Laplace_dist(pred):
 
 def nll_pytorch_dist(pred, data, rtn_loss=True):
     """
+    return negative log likelihood of each batch of data
 
-    pred: [B, T, 6], Laplace distributions and VonMises distribution
-    data: [B, T, 3], samples
+    Args:
+        pred: Tensor[B, T, 6], Laplace distributions and VonMises distribution
+        data: Tensor[B, T, 3], samples
+        rtn_loss (bool, optional): Not understood. Defaults to True.
 
+    Raises:
+        RuntimeError: if the state dimension of data is not 2 or 3
+
+    Returns:
+        negative log likelihood of each batch of data. Tensor[1]
     """
     # if coorporate direction:
 
@@ -45,13 +53,13 @@ def nll_pytorch_dist(pred, data, rtn_loss=True):
         biv_gauss_dist = get_Laplace_dist(pred[:,:,:4])
 
         pr=VonMises(pred[:,:,4], pred[:,:,5]).log_prob(data[:,:,-1]).unsqueeze(-1)
-        probs=torch.cat((-biv_gauss_dist.log_prob(data[:,:,:2]), -pr), -1)
+        probs=torch.cat((-biv_gauss_dist.log_prob(data[:,:,:2]), -pr), -1) #[B, T, 3]
         if rtn_loss:
             # return (-biv_gauss_dist.log_prob(data)).sum(1)  # Gauss
-            return probs.sum(-1).sum(1)  # Laplace
+            return probs.sum(-1).sum(1)  # Laplace [B]
         else:
             # return (-biv_gauss_dist.log_prob(data)).sum(-1)  # Gauss
-            return probs.sum(dim=(1, 2))  # Laplace
+            return probs.sum(dim=(1, 2))  # Laplace [B]
 
     elif state_dim==2:
 
@@ -84,7 +92,7 @@ def nll_loss_multimodes(pred, data, modes_pred, entropy_weight=1.0, kl_weight=1.
     log_lik = np.zeros((batch_sz, modes)) # [B, c]
     with torch.no_grad():
         for kk in range(modes):
-            nll = nll_pytorch_dist(pred[kk].transpose(0, 1), data, rtn_loss=False) # pred[kk].transpose(0, 1): [B, T, 5], data: [B, T, 2]
+            nll = nll_pytorch_dist(pred[kk].transpose(0, 1), data, rtn_loss=False) # pred[kk].transpose(0, 1): [B, T, 5], data: [B, T, 2], nll: [B]
             log_lik[:, kk] = -nll.cpu().numpy() # update one mode of all batches' log likelihood
 
     priors = modes_pred.detach().cpu().numpy() # priors won't be performed gradient on
@@ -103,10 +111,10 @@ def nll_loss_multimodes(pred, data, modes_pred, entropy_weight=1.0, kl_weight=1.
     # Adding entropy loss term to ensure that individual predictions do not try to cover multiple modes.
     entropy_vals = []
     for kk in range(modes):
-        # entropy_vals.append(get_BVG_distributions(pred[kk][:,:,:,:5]).entropy())
-        entropy_vals.append(get_Laplace_dist(pred[kk,:,:,:4]).entropy().sum(-1))
-    entropy_vals = torch.stack(entropy_vals).permute(2, 0, 1)
-    entropy_loss = torch.mean((entropy_vals).sum(2).max(1)[0]) # take the max entropy
+        # entropy_vals.append(get_BVG_distributions(pred[kk]).entropy())
+        entropy_vals.append(get_Laplace_dist(pred[kk]).entropy().sum(-1))
+    entropy_vals = torch.stack(entropy_vals).permute(2, 0, 1) # [c, T, B] -> [B, c, T]
+    entropy_loss = torch.mean((entropy_vals).sum(2).max(1)[0]) # take the max entropy [B]
     loss += entropy_weight * entropy_loss
 
     # KL divergence between the prior and the posterior distributions.

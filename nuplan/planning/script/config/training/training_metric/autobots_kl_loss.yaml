@@ -1,4 +1,4 @@
-autobots_nll_loss:
+autobots_kl_loss:
   _target_: nuplan.planning.training.modeling.metrics.autobots_metrics.AutobotsKlLoss
   _convert_: 'all'
 

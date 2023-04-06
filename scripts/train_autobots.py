@@ -5,6 +5,7 @@ from nuplan.planning.script.run_training import main as main_train
 from omegaconf import DictConfig
 import tempfile
 import warnings
+import ray
 # to run tensorboard:
 # tensorboard --logdir=/data1/nuplan/jiale/exp/autobots_experiment/autobots_model
 
@@ -77,9 +78,9 @@ if __name__ == '__main__':
             PY_FUNC = 'train', # ['train','test','cache', *'build_only'*]
             SCENARIO_BUILDER = 'nuplan', # ['nuplan','nuplan_challenge','nuplan_mini']
 
-            SCENARIO_SELECTION = 200000,
-            MAX_EPOCHS = 20,
-            BATCH_SIZE = 32,
+            # SCENARIO_SELECTION = 200000,
+            # MAX_EPOCHS = 20,
+            # BATCH_SIZE = 32,
 
             # SCENARIO_SELECTION = 100,
             # MAX_EPOCHS = 1,
@@ -93,7 +94,7 @@ if __name__ == '__main__':
     for train_dict in train_dicts:
         warnings.filterwarnings("ignore", category=RuntimeWarning)
         train_autobots(train_dict)
-
+        ray.shutdown()
     """
 
 conda activate nuplan
