@@ -10,7 +10,7 @@ import ray
 # tensorboard --logdir=/data1/nuplan/jiale/exp/autobots_experiment/autobots_model
 
 # to clear the cache:
-# rm -r /data1/nuplan/jiale/exp/cache
+# sudo rm -r /data1/nuplan/jiale/exp/cache
 
 def train_autobots(sim_dict: dict) -> str:
     # Location of path with all simulation configs
@@ -78,9 +78,9 @@ if __name__ == '__main__':
             PY_FUNC = 'train', # ['train','test','cache', *'build_only'*]
             SCENARIO_BUILDER = 'nuplan', # ['nuplan','nuplan_challenge','nuplan_mini']
 
-            # SCENARIO_SELECTION = 200000,
-            # MAX_EPOCHS = 20,
-            # BATCH_SIZE = 32,
+            SCENARIO_SELECTION = 200000,
+            MAX_EPOCHS = 20,
+            BATCH_SIZE = 32,
 
             # SCENARIO_SELECTION = 100,
             # MAX_EPOCHS = 1,
@@ -95,6 +95,13 @@ if __name__ == '__main__':
         warnings.filterwarnings("ignore", category=RuntimeWarning)
         train_autobots(train_dict)
         ray.shutdown()
+    """
+    
+    TODO: cut modes number to 6
+    TODO: increase encoder/decoder layer number
+    """
+    
+    
     """
 
 conda activate nuplan
