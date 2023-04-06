@@ -77,7 +77,7 @@ if __name__ == '__main__':
             PY_FUNC = 'train', # ['train','test','cache', *'build_only'*]
             SCENARIO_BUILDER = 'nuplan', # ['nuplan','nuplan_challenge','nuplan_mini']
 
-            SCENARIO_SELECTION = 37500,
+            SCENARIO_SELECTION = 200000,
             MAX_EPOCHS = 20,
             BATCH_SIZE = 32,
 
@@ -108,5 +108,7 @@ python ./scripts/train_autobots.py
     
     RuntimeError: Failed to compute features for scenario token f35c81eeb76759fc in log 2021.08.20.18.15.01_veh-28_00016_00436
     Error: Ran out of input
+
+    
     
     """

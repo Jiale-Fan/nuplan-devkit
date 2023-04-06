@@ -134,10 +134,10 @@ def l2_loss_fde(pred, data):
         loss, min_inds = (fde_loss + ade_loss).min(dim=1)
         return 100.0 * loss.mean()
     elif state_dim==3:
-        f_angle = torch.stack((torch.cos(data[:, -1, 2].unsqueeze(-1)),
-             torch.sin(data[:, -1, 2].unsqueeze(-1))), -1)
-        fde_loss_angle = torch.norm(torch.stack((torch.cos(pred[:, -1, :, 4].transpose(0, 1)),
-             torch.sin(pred[:, -1, :, 4].transpose(0, 1))), dim=-1) - f_angle, 2, dim=-1)
+        # f_angle = torch.stack((torch.cos(data[:, -1, 2].unsqueeze(-1)),
+        #      torch.sin(data[:, -1, 2].unsqueeze(-1))), -1)
+        # fde_loss_angle = torch.norm(torch.stack((torch.cos(pred[:, -1, :, 4].transpose(0, 1)),
+            #  torch.sin(pred[:, -1, :, 4].transpose(0, 1))), dim=-1) - f_angle, 2, dim=-1)
 
         a_angle = torch.stack((torch.cos(data[:, :, 2].unsqueeze(-1)),
              torch.sin(data[:, :, 2].unsqueeze(-1))), -1).transpose(1,2)
@@ -146,7 +146,8 @@ def l2_loss_fde(pred, data):
         
         fde_loss = torch.norm((pred[:, -1, :, :2].transpose(0, 1) - data[:, -1, :2].unsqueeze(1)), 2, dim=-1)
         ade_loss = torch.norm((pred[:, :, :, :2].transpose(1, 2) - data[:, :, :2].unsqueeze(0)), 2, dim=-1).mean(dim=2).transpose(0, 1)
-        loss, min_inds = (fde_loss + ade_loss+ fde_loss_angle+ade_loss_angle).min(dim=1) # [B,K]
+        # loss, min_inds = (fde_loss + ade_loss+ fde_loss_angle+ade_loss_angle).min(dim=1) # [B,K]
+        loss, min_inds = ( ade_loss+ade_loss_angle).min(dim=1) # [B,K]
         return 100.0 * loss.mean()
     else:
         raise RuntimeError(
