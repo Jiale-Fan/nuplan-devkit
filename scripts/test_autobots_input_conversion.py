@@ -10,7 +10,7 @@ from nuplan.planning.training.preprocessing.feature_builders.agents_feature_buil
 from nuplan.planning.training.preprocessing.target_builders.ego_trajectory_target_builder import EgoTrajectoryTargetBuilder
 
 import os
-
+import torch
 from nuplan.common.actor_state.vehicle_parameters import get_pacifica_parameters
 from nuplan.planning.scenario_builder.nuplan_db.nuplan_scenario import NuPlanScenario
 from nuplan.planning.scenario_builder.nuplan_db.nuplan_scenario_utils import (
@@ -49,14 +49,23 @@ def testTrajectory(datainput):
     # fb=AutobotsTargetBuilder(TrajectorySampling(num_poses=10, time_horizon=5.0))
     datainput=loadSample()
     ag=datainput[1]['trajectory']
-
-    ts=NuplanToAutobotsConverter.TrajectoryToAutobotsEgoin(ag)
+    c=NuplanToAutobotsConverter()
+    ts=c.TrajectoryToAutobotsEgoin(ag)
 
     print(ts)
+    return ts
 
 def group1():
     datainput=loadSample()
-    testTrajectory(datainput)
+    trajs_3=testTrajectory(datainput)
+    c=NuplanToAutobotsConverter()
+
+    ang_vec=trajs_3[:,1:,:2] - trajs_3[:,:-1,:2] 
+    ang = torch.atan2(ang_vec[:,:,0], ang_vec[:,:,1])
+    trajs_3[:,:-1,2] = ang
+    trajs_3[:,-1,2] = trajs_3[:,-2,2]
+
+    # c.output_tensor_to_trajectory(n)
     # testAgents(datainput)
     # testMap(datainput)
 
