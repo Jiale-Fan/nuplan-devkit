@@ -58,12 +58,21 @@ def simulate(sim_dict: dict) -> str:
         
         i = -1
         train_experiment_dir = sorted(Path(LOG_DIR).iterdir())[i]  # get last experiment
-        while not (train_experiment_dir / 'checkpoints').exists():
+        #################################################################################
+        # while not (train_experiment_dir / 'checkpoints').exists():
+        #     i -= 1
+        #     train_experiment_dir = sorted(Path(LOG_DIR).iterdir())[i]  # get last experiment
+        #     if i == -10: break
+        # checkpoint = sorted((train_experiment_dir / 'checkpoints').iterdir())[-1]  # get last checkpoint
+        ###################################################################################
+        while not (train_experiment_dir / 'best_model').exists():
             i -= 1
             train_experiment_dir = sorted(Path(LOG_DIR).iterdir())[i]  # get last experiment
             if i == -10: break
-        checkpoint = sorted((train_experiment_dir / 'checkpoints').iterdir())[-1]  # get last checkpoint
-        
+        checkpoint = sorted((train_experiment_dir / 'best_model').iterdir())[-1]
+
+
+
         MODEL_PATH = str(checkpoint).replace("=", "\=")
 
         print("Model path is: ")

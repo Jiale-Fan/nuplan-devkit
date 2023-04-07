@@ -191,4 +191,11 @@ class NuplanToAutobotsConverter:
         trajs_3=trajs[:,:,:3]
         trajs_3[:,:,2] = trajs[:,:,4]
 
+
+        ##########################################
+        # for debug: force the last point the same as the last second point
+
+        trajs_3[:,-1,:]=trajs_3[:,-2,:]
+        ##########################################
+
         return Trajectory(data=trajs_3)
