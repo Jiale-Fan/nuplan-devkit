@@ -56,7 +56,7 @@ def simulate(sim_dict: dict) -> str:
         # Get the checkpoint of the trained model
         last_experiment = sorted(os.listdir(LOG_DIR))[-1]
         
-        i = -2 # get last experiment
+        i = 2 # get desired experiment
         train_experiment_dir = sorted(Path(LOG_DIR).iterdir())[i]  
         
         #################################################################################
@@ -132,7 +132,7 @@ if __name__ == '__main__':
 
             # Select the planner and simulation challenge
             PLANNER = 'ml_planner',  # [simple_planner, ml_planner]
-            CHALLENGE = 'closed_loop_nonreactive_agents',  # [open_loop_boxes, closed_loop_nonreactive_agents, closed_loop_reactive_agents]
+            CHALLENGE = 'open_loop_boxes',  # [open_loop_boxes, closed_loop_nonreactive_agents, closed_loop_reactive_agents]
             DATASET_PARAMS = [
                 'scenario_builder=nuplan_mini',  # use nuplan mini database
                 'scenario_filter=all_scenarios',  # initially select all scenarios in the database

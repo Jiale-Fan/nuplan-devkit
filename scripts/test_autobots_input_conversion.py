@@ -40,8 +40,10 @@ def testMap(datainput):
 def testAgents(datainput):
 
     ag=datainput[0]['agents']
+    c=NuplanToAutobotsConverter()
+    ts=c.AgentsToAutobotsAgentsTensor(ag)
 
-    ts=NuplanToAutobotsConverter.AgentsToAutobotsAgentsTensor(ag)
+    # ar=np.array
 
     print(ts)
 
@@ -54,6 +56,10 @@ def testTrajectory(datainput):
 
     print(ts)
     return ts
+
+def group0():
+    datainput=loadSample()
+    testAgents(datainput)
 
 def group1():
     datainput=loadSample()
@@ -125,4 +131,4 @@ def group2():
 #     traceback.print_tb(e.__traceback__)
 
 
-group1()
+group0()
