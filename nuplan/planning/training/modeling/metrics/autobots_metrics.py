@@ -4,7 +4,7 @@ import torch
 
 from nuplan.planning.training.modeling.metrics.abstract_training_metric import AbstractTrainingMetric
 from nuplan.planning.training.modeling.types import TargetsType
-from nuplan.planning.training.preprocessing.features.tensor_target import TensorTarget
+from nuplan.planning.training.preprocessing.features.tensor_target import TensorFeature
 from nuplan.planning.training.preprocessing.features.trajectory import Trajectory
 
 from nuplan.planning.training.modeling.objectives.autobots_train_helpers import nll_loss_multimodes
@@ -48,8 +48,8 @@ class AutobotsNllLoss(AbstractTrainingMetric):
         
         """
 
-        pred_obs = cast(TensorTarget, predictions["pred"]).data
-        mode_probs = cast(TensorTarget, predictions["mode_probs"]).data
+        pred_obs = cast(TensorFeature, predictions["pred"]).data
+        mode_probs = cast(TensorFeature, predictions["mode_probs"]).data
         targets_xy = cast(Trajectory, targets["trajectory"]).data
         
 
@@ -99,8 +99,8 @@ class AutobotsKlLoss(AbstractTrainingMetric):
         
         """
 
-        pred_obs = cast(TensorTarget, predictions["pred"]).data
-        mode_probs = cast(TensorTarget, predictions["mode_probs"]).data
+        pred_obs = cast(TensorFeature, predictions["pred"]).data
+        mode_probs = cast(TensorFeature, predictions["mode_probs"]).data
         targets_xy = cast(Trajectory, targets["trajectory"]).data
         
 
@@ -149,8 +149,8 @@ class AutobotsPostEntropy(AbstractTrainingMetric):
         
         """
 
-        pred_obs = cast(TensorTarget, predictions["pred"]).data
-        mode_probs = cast(TensorTarget, predictions["mode_probs"]).data
+        pred_obs = cast(TensorFeature, predictions["pred"]).data
+        mode_probs = cast(TensorFeature, predictions["mode_probs"]).data
         targets_xy = cast(Trajectory, targets["trajectory"]).data
         
 
@@ -199,8 +199,8 @@ class AutobotsADEFDELoss(AbstractTrainingMetric):
         
         """
 
-        pred_obs = cast(TensorTarget, predictions["pred"]).data
-        mode_probs = cast(TensorTarget, predictions["mode_probs"]).data
+        pred_obs = cast(TensorFeature, predictions["pred"]).data
+        mode_probs = cast(TensorFeature, predictions["mode_probs"]).data
         targets_xy = cast(Trajectory, targets["trajectory"]).data
         
 

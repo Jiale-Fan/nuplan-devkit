@@ -14,7 +14,7 @@ num_heads: 16
 L_dec: 4
 tx_hidden_size: 384
 use_map_img: False
-use_map_lanes: False
+use_map_lanes: True
 
 # VectorMapFeatureBuilder
 vector_map_feature_radius: 50    # [m] The query radius scope relative to the current ego-pose.

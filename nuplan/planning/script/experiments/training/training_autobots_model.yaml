@@ -4,9 +4,9 @@ py_func: train
 objective_aggregate_mode: mean
 
 defaults:
-  - override /data_augmentation:
-      - kinematic_agent_augmentation
-      - agent_dropout_augmentation
+#   - override /data_augmentation:
+#       - kinematic_agent_augmentation
+#       - agent_dropout_augmentation
   - override /objective:
       - autobots_objective # does this need modification?
   - override /splitter: nuplan

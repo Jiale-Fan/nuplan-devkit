@@ -13,7 +13,7 @@ from nuplan.planning.training.preprocessing.features.abstract_model_feature impo
 
 
 @dataclass
-class TensorTarget(AbstractModelFeature):
+class TensorFeature(AbstractModelFeature):
     """
     Dataclass that holds trajectory signals produced from the model or from the dataset for supervision.
 
@@ -35,23 +35,23 @@ class TensorTarget(AbstractModelFeature):
         """Inherited, see superclass."""
         return True
 
-    def to_device(self, device: torch.device) -> TensorTarget:
+    def to_device(self, device: torch.device) -> TensorFeature:
         """Implemented. See interface."""
         validate_type(self.data, torch.Tensor)
-        return TensorTarget(data=self.data.to(device=device))
+        return TensorFeature(data=self.data.to(device=device))
 
-    def to_feature_tensor(self) -> TensorTarget:
+    def to_feature_tensor(self) -> TensorFeature:
         """Inherited, see superclass."""
-        return TensorTarget(data=to_tensor(self.data))
+        return TensorFeature(data=to_tensor(self.data))
 
     @classmethod
-    def deserialize(cls, data: Dict[str, Any]) -> TensorTarget:
+    def deserialize(cls, data: Dict[str, Any]) -> TensorFeature:
         """Implemented. See interface."""
-        return TensorTarget(data=data["data"])
+        return TensorFeature(data=data["data"])
 
-    def unpack(self) -> List[TensorTarget]:
+    def unpack(self) -> List[TensorFeature]:
         """Implemented. See interface."""
-        return [TensorTarget(data[None]) for data in self.data]
+        return [TensorFeature(data[None]) for data in self.data]
 
     @property
     def num_dimensions(self) -> int:
@@ -65,4 +65,5 @@ class TensorTarget(AbstractModelFeature):
         """
         :return: number of batches in the trajectory, None if trajectory does not have batch dimension
         """
-        return None if self.num_dimensions <= 2 else self.data.shape[0]
+        # return None if self.num_dimensions <= 2 else self.data.shape[0]
+        return self.data.shape[0]

@@ -5,7 +5,7 @@ import torch
 from nuplan.planning.training.modeling.objectives.abstract_objective import AbstractObjective
 from nuplan.planning.training.modeling.objectives.scenario_weight_utils import extract_scenario_type_weight
 from nuplan.planning.training.modeling.types import FeaturesType, ScenarioListType, TargetsType
-from nuplan.planning.training.preprocessing.features.tensor_target import TensorTarget
+from nuplan.planning.training.preprocessing.features.tensor_target import TensorFeature
 from nuplan.planning.training.preprocessing.features.trajectory import Trajectory
 
 from nuplan.planning.training.modeling.objectives.autobots_train_helpers import nll_loss_multimodes, nll_loss_multimodes_joint
@@ -49,8 +49,8 @@ class AutobotsObjective(AbstractObjective):
         
         """
 
-        pred_obs = cast(TensorTarget, predictions["pred"]).data
-        mode_probs = cast(TensorTarget, predictions["mode_probs"]).data
+        pred_obs = cast(TensorFeature, predictions["pred"]).data
+        mode_probs = cast(TensorFeature, predictions["mode_probs"]).data
         targets_xy = cast(Trajectory, targets["trajectory"]).data
         
 

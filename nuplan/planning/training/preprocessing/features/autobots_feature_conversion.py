@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple, Type
+from typing import Dict, List, Optional, Tuple, Type, cast
 
 import torch
 from torch import Tensor
@@ -12,6 +12,16 @@ from nuplan.planning.training.preprocessing.features.agents import Agents
 from nuplan.planning.training.preprocessing.features.trajectory import Trajectory
 
 import numpy as np
+
+def convert_to_tensor(input):
+    if isinstance(input, np.ndarray):
+        input = torch.from_numpy(input)
+    elif isinstance(input, torch.Tensor):
+        # do nothing, input is already a tensor
+        pass
+    else:
+        raise TypeError("input must be either a numpy.ndarray or a torch.Tensor")
+    return input
 
 class NuplanToAutobotsConverter:
     def __init__(self, S=200, P=600, _M=100):
@@ -76,6 +86,8 @@ class NuplanToAutobotsConverter:
         # length_maxes = [torch.max(torch.tensor(x)) for x in lengths]
         # max_p_num = torch.max(torch.tensor(length_maxes))
 
+        vec_map = vec_map.to_feature_tensor() # to address error: expected Tensor as element 0 in argument 0, but got numpy.ndarray
+
         # pad the lane_groupings
         # padded_list_list = [[torch.nn.functional.pad(x, (0, max(P - len(x), 0)), 'constant', 0) for x in sublist] for sublist in vec_map.lane_groupings]
         list_idx = [torch.nn.utils.rnn.pad_sequence(sublist, batch_first=True) for sublist in vec_map.lane_groupings]
@@ -118,8 +130,9 @@ class NuplanToAutobotsConverter:
         Returns:
             Tensor: [B, T_obs, M-1, k_attr+1] example [64,4,7,3]
         """
-
+        agents=agents.to_feature_tensor()
         # every scenario may have different number of agents
+        # so we need to pad the agents to the same length
 
         # lengths = [x.shape[1] for x in agents.agents]
         # length_maxes = [torch.max(torch.tensor(x)) for x in lengths]
@@ -158,7 +171,7 @@ class NuplanToAutobotsConverter:
         Returns:
             Tensor: [B, T_obs, k_attr+1] example [64,4,3]
         """
-
+        agents=agents.to_feature_tensor()
         ego_in=torch.stack(agents.ego)
         # if ego_in.dim == 2:
         #     ego_in=torch.unsqueeze(ego_in, 0) # if two dimension, unsqueeze to create one more "batch" dimension
