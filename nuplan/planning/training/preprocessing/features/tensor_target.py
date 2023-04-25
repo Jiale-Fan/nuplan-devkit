@@ -10,7 +10,7 @@ import torch
 from nuplan.planning.script.builders.utils.utils_type import validate_type
 from nuplan.planning.training.preprocessing.feature_builders.abstract_feature_builder import AbstractModelFeature
 from nuplan.planning.training.preprocessing.features.abstract_model_feature import FeatureDataType, to_tensor
-
+from torch.utils.data.dataloader import default_collate
 
 @dataclass
 class TensorFeature(AbstractModelFeature):
@@ -29,6 +29,15 @@ class TensorFeature(AbstractModelFeature):
 
     #     if (state_size != 2) and (state_size != 4):
     #         raise RuntimeError(f'Invalid tensor target data. Expected 2 (mode_probs) or 4 (pred) on last dimension, got {state_size}.')
+    @classmethod
+    def collate(cls, batch: List[AbstractModelFeature]) -> AbstractModelFeature:
+        """
+        Batch features together with a default_collate function
+        :param batch: features to be batched
+        :return: batched features together
+        """
+        serialized = [sample.serialize() for sample in batch]
+        return cls.deserialize(default_collate(serialized))
 
     @cached_property
     def is_valid(self) -> bool:

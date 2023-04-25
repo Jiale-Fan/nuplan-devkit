@@ -105,6 +105,9 @@ class NuplanToAutobotsConverter:
         lf_shape=lane_features_tensor.shape
         map_autobots =  torch.nn.functional.pad(lane_features_tensor[:, :min(lf_shape[1], self.S), :, :], (0, 0, 0, 0, 0, max(self.S-lf_shape[1], 0)), 'constant', 0) # map_autobots shape is [B, S, P, 4]
 
+        
+        map_autobots = map_autobots.squeeze(0) # squeeze the batch dimension if batch size is 1
+
         return map_autobots
 
      

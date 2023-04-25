@@ -67,7 +67,7 @@ class AutobotsMapFeatureBuilder(VectorMapFeatureBuilder):
     @torch.jit.unused
     def get_feature_type(self) -> Type[AbstractModelFeature]:
         """Inherited, see superclass."""
-        return Tensor # type: ignore
+        return TensorFeature # type: ignore
 
     @torch.jit.unused
     @classmethod
@@ -78,7 +78,9 @@ class AutobotsMapFeatureBuilder(VectorMapFeatureBuilder):
     @torch.jit.unused
     def get_features_from_scenario(self, scenario: AbstractScenario) -> Tensor:
         vec_map=super(AutobotsMapFeatureBuilder, self).get_features_from_scenario(scenario)
-        return TensorFeature(data=self.converter.VectorMapToAutobotsMapTensor(vec_map))
+        route_roadblock_ids = scenario.get_route_roadblock_ids()
+        tf=TensorFeature(data=self.converter.VectorMapToAutobotsMapTensor(vec_map))
+        return tf
 
     @torch.jit.unused
     def get_features_from_simulation(

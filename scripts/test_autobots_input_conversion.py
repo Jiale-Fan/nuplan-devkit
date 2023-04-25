@@ -1,9 +1,9 @@
 
 import pickle
-from nuplan.planning.training.preprocessing.feature_builders.autobots_feature_builder import AutobotsTargetBuilder
+# from nuplan.planning.training.preprocessing.feature_builders.autobots_feature_builder import AutobotsMapFeatureBuilder
 from nuplan.planning.simulation.trajectory.trajectory_sampling import TrajectorySampling
 from nuplan.planning.training.preprocessing.features.autobots_feature_conversion import NuplanToAutobotsConverter
-from nuplan.planning.training.preprocessing.feature_builders.autobots_feature_builder import AutobotsModeProbsNominalTargetBuilder, AutobotsTargetBuilder, AutobotsPredNominalTargetBuilder
+from nuplan.planning.training.preprocessing.feature_builders.autobots_feature_builder import AutobotsModeProbsNominalTargetBuilder, AutobotsPredNominalTargetBuilder
 
 from nuplan.planning.training.preprocessing.feature_builders.vector_map_feature_builder import VectorMapFeatureBuilder
 from nuplan.planning.training.preprocessing.feature_builders.agents_feature_builder import AgentsFeatureBuilder
@@ -32,8 +32,8 @@ def loadSample():
 def testMap(datainput):
 
     vec_map=datainput[0]['vector_map']
-
-    ts=NuplanToAutobotsConverter.VectorMapToAutobotsMapTensor(vec_map)
+    c=NuplanToAutobotsConverter()
+    ts=c.VectorMapToAutobotsMapTensor(vec_map)
 
     print(ts)
 
@@ -59,7 +59,8 @@ def testTrajectory(datainput):
 
 def group0():
     datainput=loadSample()
-    testAgents(datainput)
+    # testAgents(datainput)
+    testMap(datainput)
 
 def group1():
     datainput=loadSample()
@@ -75,47 +76,47 @@ def group1():
     # testAgents(datainput)
     # testMap(datainput)
 
-def group2():
-    scenario = NuPlanScenario(
-        data_root='/data1/nuplan/dataset/nuplan-v1.1/trainval',
-        log_file_load_path='/data1/nuplan/dataset/nuplan-v1.1/trainval/2021.08.09.17.55.59_veh-28_00021_00307.db',
-        initial_lidar_token='01602e046c4753b0',
-        initial_lidar_timestamp=1628531925250106,
-        scenario_type=DEFAULT_SCENARIO_NAME,
-        map_root='stationary',
-        map_version='nuplan-maps-v1.0',
-        map_name='us-ma-boston',
-        scenario_extraction_info=ScenarioExtractionInfo() ,
-        ego_vehicle_parameters=get_pacifica_parameters(),
-    )
+# def group2():
+#     scenario = NuPlanScenario(
+#         data_root='/data1/nuplan/dataset/nuplan-v1.1/trainval',
+#         log_file_load_path='/data1/nuplan/dataset/nuplan-v1.1/trainval/2021.08.09.17.55.59_veh-28_00021_00307.db',
+#         initial_lidar_token='01602e046c4753b0',
+#         initial_lidar_timestamp=1628531925250106,
+#         scenario_type=DEFAULT_SCENARIO_NAME,
+#         map_root='stationary',
+#         map_version='nuplan-maps-v1.0',
+#         map_name='us-ma-boston',
+#         scenario_extraction_info=ScenarioExtractionInfo() ,
+#         ego_vehicle_parameters=get_pacifica_parameters(),
+#     )
 
-    # scenario = NuPlanScenario(
-    #     data_root='/data1/nuplan/dataset/nuplan-v1.1/trainval',
-    #     log_file_load_path='/data1/nuplan/dataset/nuplan-v1.1/trainval/2021.08.20.18.15.01_veh-28_00016_00436',
-    #     initial_lidar_token='f35c81eeb76759fc',
-    #     initial_lidar_timestamp=1628531925250106,
-    #     scenario_type=DEFAULT_SCENARIO_NAME,
-    #     map_root='stationary',
-    #     map_version='nuplan-maps-v1.0',
-    #     map_name='us-ma-boston',
-    #     scenario_extraction_info=ScenarioExtractionInfo() ,
-    #     ego_vehicle_parameters=get_pacifica_parameters(),
-    # )
+#     # scenario = NuPlanScenario(
+#     #     data_root='/data1/nuplan/dataset/nuplan-v1.1/trainval',
+#     #     log_file_load_path='/data1/nuplan/dataset/nuplan-v1.1/trainval/2021.08.20.18.15.01_veh-28_00016_00436',
+#     #     initial_lidar_token='f35c81eeb76759fc',
+#     #     initial_lidar_timestamp=1628531925250106,
+#     #     scenario_type=DEFAULT_SCENARIO_NAME,
+#     #     map_root='stationary',
+#     #     map_version='nuplan-maps-v1.0',
+#     #     map_name='us-ma-boston',
+#     #     scenario_extraction_info=ScenarioExtractionInfo() ,
+#     #     ego_vehicle_parameters=get_pacifica_parameters(),
+#     # )
 
-    # VectorMapFeatureBuilder.get_features_from_scenario(scenario)
+#     # VectorMapFeatureBuilder.get_features_from_scenario(scenario)
 
-    # 实例化各个类
-    autobots_target_builder = AutobotsTargetBuilder(TrajectorySampling(num_poses=4, time_horizon=1.5))
-    autobots_mode_probs_nominal_target_builder = AutobotsModeProbsNominalTargetBuilder()
-    autobots_pred_nominal_target_builder = AutobotsPredNominalTargetBuilder()
+#     # 实例化各个类
+#     autobots_target_builder = AutobotsTargetBuilder(TrajectorySampling(num_poses=4, time_horizon=1.5))
+#     autobots_mode_probs_nominal_target_builder = AutobotsModeProbsNominalTargetBuilder()
+#     autobots_pred_nominal_target_builder = AutobotsPredNominalTargetBuilder()
 
-    # 调用程序
-    a=autobots_target_builder.get_targets(scenario)
-    b=autobots_mode_probs_nominal_target_builder.get_targets(scenario)
-    c=autobots_pred_nominal_target_builder.get_targets(scenario)
+#     # 调用程序
+#     a=autobots_target_builder.get_targets(scenario)
+#     b=autobots_mode_probs_nominal_target_builder.get_targets(scenario)
+#     c=autobots_pred_nominal_target_builder.get_targets(scenario)
 
 
-    print("done")
+#     print("done")
 
 
 # def group3():
