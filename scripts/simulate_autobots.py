@@ -54,9 +54,10 @@ def simulate(sim_dict: dict) -> str:
         print(LOG_DIR)
 
         # Get the checkpoint of the trained model
-        last_experiment = sorted(os.listdir(LOG_DIR))[-1]
+        # last_experiment = sorted(os.listdir(LOG_DIR))[-1]
+        # checkpoint = sorted((last_experiment / 'best_model').iterdir())[-1]
         
-        i = 2 # get desired experiment
+        i = -1 # get desired experiment
         train_experiment_dir = sorted(Path(LOG_DIR).iterdir())[i]  
         
         #################################################################################
@@ -134,9 +135,9 @@ if __name__ == '__main__':
             PLANNER = 'ml_planner',  # [simple_planner, ml_planner]
             CHALLENGE = 'open_loop_boxes',  # [open_loop_boxes, closed_loop_nonreactive_agents, closed_loop_reactive_agents]
             DATASET_PARAMS = [
-                'scenario_builder=nuplan_mini',  # use nuplan mini database
-                'scenario_filter=all_scenarios',  # initially select all scenarios in the database
-                'scenario_filter.scenario_types=[near_multiple_vehicles, on_pickup_dropoff, starting_unprotected_cross_turn, high_magnitude_jerk]',  # select scenario types
+                'scenario_builder=nuplan_challenge',  # use nuplan mini database
+                'scenario_filter=nuplan_challenge_scenarios',  # initially select all scenarios in the database
+                'scenario_filter.scenario_types=[starting_left_turn, starting_right_turn, starting_straight_traffic_light_intersection_traversal, stopping_with_lead, high_lateral_acceleration, high_magnitude_speed, low_magnitude_speed, traversing_pickup_dropoff, waiting_for_pedestrian_to_cross, behind_long_vehicle, stationary_in_traffic, near_multiple_vehicles, changing_lane, following_lane_with_lead]',  # select scenario types
                 'scenario_filter.num_scenarios_per_type=10',  # use 10 scenarios per scenario type
             ],
         

@@ -76,18 +76,25 @@ class AutobotsMapFeatureBuilder(VectorMapFeatureBuilder):
         return "tensor_map"
 
     @torch.jit.unused
-    def get_features_from_scenario(self, scenario: AbstractScenario) -> Tensor:
+    def get_features_from_scenario(self, scenario: AbstractScenario, with_route = True) -> Tensor:
         vec_map=super(AutobotsMapFeatureBuilder, self).get_features_from_scenario(scenario)
-        route_roadblock_ids = scenario.get_route_roadblock_ids()
-        tf=TensorFeature(data=self.converter.VectorMapToAutobotsMapTensor(vec_map))
+        # route_roadblock_ids = scenario.get_route_roadblock_ids()
+        if with_route:
+            tf=TensorFeature(data=self.converter.VectorMapToAutobotsMapTensorWithRoute(vec_map))
+        else:
+            tf=TensorFeature(data=self.converter.VectorMapToAutobotsMapTensor(vec_map))
         return tf
 
     @torch.jit.unused
     def get_features_from_simulation(
-        self, current_input: PlannerInput, initialization: PlannerInitialization
+        self, current_input: PlannerInput, initialization: PlannerInitialization, with_route = True
     ) -> Tensor:
         vec_map=super(AutobotsMapFeatureBuilder, self).get_features_from_simulation(current_input, initialization)
-        return TensorFeature(data=self.converter.VectorMapToAutobotsMapTensor(vec_map))
+        if with_route:
+            tf=TensorFeature(data=self.converter.VectorMapToAutobotsMapTensorWithRoute(vec_map))
+        else:
+            tf=TensorFeature(data=self.converter.VectorMapToAutobotsMapTensor(vec_map))
+        return tf
 
 
 # This class is unused

@@ -351,7 +351,7 @@ class AutoBotEgo(TorchModuleWrapper):
         elif self.use_map_lanes:
             # [TODO] only add the ego agent's route with learned positional encoding.
             # 
-            roads = self.pos_encoder_route(roads)
+            # roads = self.pos_encoder_route(roads)
             orig_map_features, orig_road_segs_masks = self.map_encoder(roads, ego_soctemp_emb)
             map_features = orig_map_features.unsqueeze(2).repeat(1, 1, self.c, 1).view(-1, B*self.c, self.d_k)
             road_segs_masks = orig_road_segs_masks.unsqueeze(1).repeat(1, self.c, 1).view(B*self.c, -1)
