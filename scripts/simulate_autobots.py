@@ -67,13 +67,13 @@ def simulate(sim_dict: dict) -> str:
         #     if i == -10: break
         # checkpoint = sorted((train_experiment_dir / 'checkpoints').iterdir())[-1]  # get last checkpoint
         ###################################################################################
-        while not (train_experiment_dir / 'best_model').exists():
-            i -= 1
-            train_experiment_dir = sorted(Path(LOG_DIR).iterdir())[i]  # get last experiment
-            if i == -10: break
+        # while not (train_experiment_dir / 'best_model').exists():
+        #     i -= 1
+        #     train_experiment_dir = sorted(Path(LOG_DIR).iterdir())[i]  # get last experiment
+        #     if i == -10: break
         checkpoint = sorted((train_experiment_dir / 'best_model').iterdir())[-1]
 
-
+        checkpoint = sorted((train_experiment_dir / 'checkpoints').iterdir())[-1]
 
         MODEL_PATH = str(checkpoint).replace("=", "\=")
 
@@ -133,7 +133,7 @@ if __name__ == '__main__':
 
             # Select the planner and simulation challenge
             PLANNER = 'ml_planner',  # [simple_planner, ml_planner]
-            CHALLENGE = 'closed_loop_nonreactive_agents',  # [open_loop_boxes, closed_loop_nonreactive_agents, closed_loop_reactive_agents]
+            CHALLENGE = 'open_loop_boxes',  # [open_loop_boxes, closed_loop_nonreactive_agents, closed_loop_reactive_agents]
             DATASET_PARAMS = [
                 'scenario_builder=nuplan_challenge',  # use nuplan mini database
                 'scenario_filter=nuplan_challenge_scenarios',  # initially select all scenarios in the database
