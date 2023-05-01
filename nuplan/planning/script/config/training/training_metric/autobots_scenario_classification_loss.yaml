@@ -1,0 +1,3 @@
+autobots_scenario_classification_loss:
+  _target_: nuplan.planning.training.modeling.metrics.autobots_metrics.AutobotsScenarioClassificationLoss
+  _convert_: 'all'

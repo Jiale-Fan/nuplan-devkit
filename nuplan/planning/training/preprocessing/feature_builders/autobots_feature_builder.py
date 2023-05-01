@@ -18,6 +18,7 @@ from nuplan.planning.training.preprocessing.feature_builders.agents_feature_buil
 from nuplan.planning.training.preprocessing.target_builders.ego_trajectory_target_builder import EgoTrajectoryTargetBuilder
 from nuplan.planning.training.preprocessing.features.trajectory import Trajectory
 from nuplan.planning.training.preprocessing.features.tensor_target import TensorFeature
+from nuplan.planning.training.preprocessing.features.autobots_feature_conversion import ROUTE_AND_LIGHTS, ROUTE_ONLY, NEITHER
 
 from nuplan.planning.training.preprocessing.features.abstract_model_feature import AbstractModelFeature
 from nuplan.planning.training.preprocessing.target_builders.abstract_target_builder import AbstractTargetBuilder
@@ -29,6 +30,7 @@ from nuplan.planning.simulation.trajectory.trajectory_sampling import Trajectory
 import numpy as np
 from numpy.typing import NDArray
 import itertools
+
 
 # def coords_to_map_attr(coords) -> NDArray:
 #     """Map coordinates in VectorMap format to AutoBots features
@@ -51,7 +53,6 @@ import itertools
 #     return point_feature_tab
 
 
-# This class is unused
 class AutobotsMapFeatureBuilder(VectorMapFeatureBuilder):
 
     def __init__(self, radius: float, converter: NuplanToAutobotsConverter, connection_scales: Optional[List[int]] = None) -> None:
@@ -76,24 +77,18 @@ class AutobotsMapFeatureBuilder(VectorMapFeatureBuilder):
         return "tensor_map"
 
     @torch.jit.unused
-    def get_features_from_scenario(self, scenario: AbstractScenario, with_route = True) -> Tensor:
+    def get_features_from_scenario(self, scenario: AbstractScenario, with_route_lights = ROUTE_AND_LIGHTS) -> Tensor:
         vec_map=super(AutobotsMapFeatureBuilder, self).get_features_from_scenario(scenario)
         # route_roadblock_ids = scenario.get_route_roadblock_ids()
-        if with_route:
-            tf=TensorFeature(data=self.converter.VectorMapToAutobotsMapTensorWithRoute(vec_map))
-        else:
-            tf=TensorFeature(data=self.converter.VectorMapToAutobotsMapTensor(vec_map))
+        tf=TensorFeature(data=self.converter.VectorMapToAutobotsMapTensor(vec_map, with_route_lights))
         return tf
 
     @torch.jit.unused
     def get_features_from_simulation(
-        self, current_input: PlannerInput, initialization: PlannerInitialization, with_route = True
+        self, current_input: PlannerInput, initialization: PlannerInitialization, with_route_lights = ROUTE_AND_LIGHTS
     ) -> Tensor:
         vec_map=super(AutobotsMapFeatureBuilder, self).get_features_from_simulation(current_input, initialization)
-        if with_route:
-            tf=TensorFeature(data=self.converter.VectorMapToAutobotsMapTensorWithRoute(vec_map))
-        else:
-            tf=TensorFeature(data=self.converter.VectorMapToAutobotsMapTensor(vec_map))
+        tf=TensorFeature(data=self.converter.VectorMapToAutobotsMapTensor(vec_map, with_route_lights))
         return tf
 
 
@@ -131,7 +126,7 @@ class AutobotsAgentsFeatureBuilder(AgentsFeatureBuilder):
         agent=super(AutobotsAgentsFeatureBuilder, self).get_features_from_simulation(current_input, initialization)
         return TensorFeature(data=self.converter.AgentsToAutobotsAgentsTensor(agent))
 
-
+# This class is unused
 class AutobotsEgoinFeatureBuilder(AgentsFeatureBuilder):
     def __init__(self, trajectory_sampling: TrajectorySampling, converter: NuplanToAutobotsConverter) -> None:
         """
@@ -246,4 +241,49 @@ class AutobotsModeProbsNominalTargetBuilder(AbstractTargetBuilder):
 
         nominal_target = TensorFeature(data=np.zeros((2,2)))
         return nominal_target
+
+
+SCENARIO_TYPE_ID = {
+    "starting_left_turn": 0,
+    "starting_right_turn": 1,
+  "starting_straight_traffic_light_intersection_traversal": 2,
+  "stopping_with_lead": 3,
+  "high_lateral_acceleration": 4,
+  "high_magnitude_speed": 5,
+  "low_magnitude_speed": 6,
+  "traversing_pickup_dropoff": 7,
+  "waiting_for_pedestrian_to_cross": 8,
+  "behind_long_vehicle": 9,
+  "stationary_in_traffic": 10,
+  "near_multiple_vehicles": 11,
+  "changing_lane": 12,
+  "following_lane_with_lead": 13
+}
+
+class AutobotsScenarioTypeTargetBuilder(AbstractTargetBuilder):
+    def get_feature_unique_name(cls) -> str:
+        """Inherited, see superclass."""
+        return "scenario_type"
+
+    @classmethod
+    def get_feature_type(cls) -> Type[AbstractModelFeature]:
+        """Inherited, see superclass."""
+        return TensorFeature  # type: ignore
+
+    def get_targets(self, scenario: AbstractScenario) -> Tensor:
+        target = TensorFeature(data=torch.tensor(SCENARIO_TYPE_ID[scenario.scenario_type], dtype=torch.long))
+        return target
        
+# this function is unused, since the pytorch cross entropy loss function has implemented this function
+def scenario_type_one_hot_encoding(scenario_type: str) -> Tensor:
+    """_summary_
+
+    Args:
+        scenario_type (str)
+
+    Returns:
+        Tensor: one hot encoding of the scenario type
+    """
+    scenario_type_tensor = torch.zeros(len(SCENARIO_TYPE_ID))
+    scenario_type_tensor[SCENARIO_TYPE_ID[scenario_type]] = 1
+    return scenario_type_tensor

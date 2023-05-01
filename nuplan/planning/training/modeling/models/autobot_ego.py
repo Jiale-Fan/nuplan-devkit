@@ -11,7 +11,7 @@ from nuplan.planning.training.preprocessing.target_builders.ego_trajectory_targe
 
 from nuplan.planning.simulation.trajectory.trajectory_sampling import TrajectorySampling
 from nuplan.planning.training.preprocessing.feature_builders.vector_map_feature_builder import VectorMapFeatureBuilder
-from nuplan.planning.training.preprocessing.feature_builders.autobots_feature_builder import AutobotsMapFeatureBuilder, AutobotsAgentsFeatureBuilder, AutobotsEgoinFeatureBuilder
+from nuplan.planning.training.preprocessing.feature_builders.autobots_feature_builder import AutobotsMapFeatureBuilder, AutobotsAgentsFeatureBuilder, AutobotsEgoinFeatureBuilder, AutobotsScenarioTypeTargetBuilder
 
 from nuplan.planning.training.preprocessing.features.agents import Agents
 from nuplan.planning.training.preprocessing.features.vector_map import VectorMap
@@ -136,10 +136,14 @@ class AutoBotEgo(TorchModuleWrapper):
                     connection_scales=vector_map_connection_scales,
                     converter=self.converter,
                 ),
+                VectorMapFeatureBuilder(
+                    radius=vector_map_feature_radius,
+                    connection_scales=vector_map_connection_scales,
+                ),
                 AgentsFeatureBuilder(trajectory_sampling=past_trajectory_sampling),
             ],
             target_builders=[EgoTrajectoryTargetBuilder(future_trajectory_sampling=future_trajectory_sampling),
-             AutobotsPredNominalTargetBuilder(), AutobotsModeProbsNominalTargetBuilder()],
+             AutobotsPredNominalTargetBuilder(), AutobotsModeProbsNominalTargetBuilder(), AutobotsScenarioTypeTargetBuilder()],
             future_trajectory_sampling=future_trajectory_sampling,
         )
 

@@ -8,7 +8,7 @@ from nuplan.planning.training.modeling.types import FeaturesType, ScenarioListTy
 from nuplan.planning.training.preprocessing.features.tensor_target import TensorFeature
 from nuplan.planning.training.preprocessing.features.trajectory import Trajectory
 
-from nuplan.planning.training.modeling.objectives.autobots_train_helpers import nll_loss_multimodes, nll_loss_multimodes_joint
+from nuplan.planning.training.modeling.objectives.autobots_train_helpers import nll_loss_multimodes, nll_loss_multimodes_joint, scenario_specific_loss
 from torch import Tensor
 
 class AutobotsObjective(AbstractObjective):
@@ -16,7 +16,7 @@ class AutobotsObjective(AbstractObjective):
     Autobots ego objective
     """
 
-    def __init__(self, scenario_type_loss_weighting: Dict[str, float], entropy_weight, kl_weight, use_FDEADE_aux_loss):
+    def __init__(self, scenario_type_loss_weighting: Dict[str, float], entropy_weight, kl_weight, use_FDEADE_aux_loss, cross_entropy_weight):
         """
         Initializes the class
 
@@ -27,6 +27,7 @@ class AutobotsObjective(AbstractObjective):
         self.entropy_weight=entropy_weight
         self.kl_weight=kl_weight
         self.use_FDEADE_aux_loss=use_FDEADE_aux_loss
+        self.cross_entropy_weight = cross_entropy_weight
 
     def name(self) -> str:
         """
@@ -52,16 +53,21 @@ class AutobotsObjective(AbstractObjective):
         pred_obs = cast(TensorFeature, predictions["pred"]).data
         mode_probs = cast(TensorFeature, predictions["mode_probs"]).data
         targets_xy = cast(Trajectory, targets["trajectory"]).data
+        scenario_types = cast(TensorFeature, targets["scenario_type"]).data
         
+        self.cross_entropy_weight *= 0.999
 
-        nll_loss, kl_loss, post_entropy, adefde_loss = nll_loss_multimodes(pred_obs, targets_xy[:, :, :2], mode_probs,
-                                                                                   entropy_weight=self.entropy_weight,
-                                                                                   kl_weight=self.kl_weight,
-                                                                                   use_FDEADE_aux_loss=self.use_FDEADE_aux_loss)
+        fde_ade_loss, _, weighted_cls_loss  = scenario_specific_loss(pred_obs, targets_xy[:, :, :2], mode_probs, scenario_types, self.cross_entropy_weight)
+        
+        # nll_loss, kl_loss, post_entropy, adefde_loss = nll_loss_multimodes(pred_obs, targets_xy[:, :, :2], mode_probs,
+        #                                                                            entropy_weight=self.entropy_weight,
+        #                                                                            kl_weight=self.kl_weight,
+        #                                                                            use_FDEADE_aux_loss=self.use_FDEADE_aux_loss)
 
-        total_loss=nll_loss + adefde_loss + kl_loss
+        # total_loss=nll_loss + adefde_loss + kl_loss
         # how to implement the gradient clip?
 
         # nll_loss: 
 
+        total_loss = fde_ade_loss + weighted_cls_loss
         return total_loss

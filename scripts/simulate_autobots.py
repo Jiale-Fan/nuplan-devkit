@@ -133,7 +133,7 @@ if __name__ == '__main__':
 
             # Select the planner and simulation challenge
             PLANNER = 'ml_planner',  # [simple_planner, ml_planner]
-            CHALLENGE = 'open_loop_boxes',  # [open_loop_boxes, closed_loop_nonreactive_agents, closed_loop_reactive_agents]
+            CHALLENGE = 'closed_loop_nonreactive_agents',  # [open_loop_boxes, closed_loop_nonreactive_agents, closed_loop_reactive_agents]
             DATASET_PARAMS = [
                 'scenario_builder=nuplan_challenge',  # use nuplan mini database
                 'scenario_filter=nuplan_challenge_scenarios',  # initially select all scenarios in the database
@@ -159,7 +159,7 @@ if __name__ == '__main__':
         simulation_folder = simulate(sim_dict)
         simulation_folders.append(simulation_folder)
         
-    open_nuboard(simulation_folders)
+    # open_nuboard(simulation_folders)
     
 
     """

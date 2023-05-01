@@ -3,11 +3,12 @@ import pickle
 # from nuplan.planning.training.preprocessing.feature_builders.autobots_feature_builder import AutobotsMapFeatureBuilder
 from nuplan.planning.simulation.trajectory.trajectory_sampling import TrajectorySampling
 from nuplan.planning.training.preprocessing.features.autobots_feature_conversion import NuplanToAutobotsConverter
-from nuplan.planning.training.preprocessing.feature_builders.autobots_feature_builder import AutobotsModeProbsNominalTargetBuilder, AutobotsPredNominalTargetBuilder
+from nuplan.planning.training.preprocessing.feature_builders.autobots_feature_builder import AutobotsModeProbsNominalTargetBuilder, AutobotsPredNominalTargetBuilder, scenario_type_one_hot_encoding
 
 from nuplan.planning.training.preprocessing.feature_builders.vector_map_feature_builder import VectorMapFeatureBuilder
 from nuplan.planning.training.preprocessing.feature_builders.agents_feature_builder import AgentsFeatureBuilder
 from nuplan.planning.training.preprocessing.target_builders.ego_trajectory_target_builder import EgoTrajectoryTargetBuilder
+from nuplan.planning.training.preprocessing.features.tensor_target import TensorFeature
 
 import os
 import torch
@@ -17,6 +18,7 @@ from nuplan.planning.scenario_builder.nuplan_db.nuplan_scenario_utils import (
     DEFAULT_SCENARIO_NAME,
     ScenarioExtractionInfo,
 )
+import numpy as np
 
 
 # file_name="./project_records/laneGCN_input_sample.obj" # one batch with batch size 1
@@ -131,5 +133,21 @@ def group1():
 #     print("Exception message:", str(e))
 #     traceback.print_tb(e.__traceback__)
 
+def group4():
+    tst_ls = [TensorFeature(data= np.random.rand(14)) for _ in range(10)]
+    collated = TensorFeature.collate(tst_ls) # [10, 14]
 
-group0()
+    ts = scenario_type_one_hot_encoding(scenario_type='traversing_pickup_dropoff')
+
+    print(collated)
+
+def group5():
+    tst_ls = [TensorFeature(data= torch.tensor(np.random.randint(14))) for _ in range(10)]
+    collated = TensorFeature.collate(tst_ls) # [10, 14]
+
+
+    print(collated)
+
+if __name__ == "__main__":
+    # group0()
+    group5()
