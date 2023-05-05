@@ -4,9 +4,25 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch import Tensor
+from nuplan.planning.training.modeling.torch_module_wrapper import TorchModuleWrapper
+from nuplan.planning.training.preprocessing.feature_builders.autobots_feature_builder import AutobotsPredNominalTargetBuilder, AutobotsModeProbsNominalTargetBuilder
+from nuplan.planning.training.preprocessing.target_builders.ego_trajectory_target_builder import EgoTrajectoryTargetBuilder
 
-from models.context_encoders import MapEncoderPtsMA
+from nuplan.planning.simulation.trajectory.trajectory_sampling import TrajectorySampling
+from nuplan.planning.training.preprocessing.feature_builders.vector_map_feature_builder import VectorMapFeatureBuilder
+from nuplan.planning.training.preprocessing.feature_builders.autobots_feature_builder import AutobotsMapFeatureBuilder, AutobotsAgentsFeatureBuilder, AutobotsEgoinFeatureBuilder, AutobotsScenarioTypeTargetBuilder
 
+from nuplan.planning.training.preprocessing.features.agents import Agents
+from nuplan.planning.training.preprocessing.features.vector_map import VectorMap
+from nuplan.planning.training.preprocessing.features.tensor_target import TensorFeature
+from nuplan.planning.training.preprocessing.feature_builders.agents_feature_builder import AgentsFeatureBuilder
+from nuplan.planning.training.preprocessing.features.autobots_feature_conversion import NuplanToAutobotsConverter
+from nuplan.planning.training.modeling.types import FeaturesType, TargetsType
+
+from typing import List, Optional, cast
+# from context_encoders import MapEncoderCNN, MapEncoderPts
+from nuplan.planning.training.modeling.models.context_encoders import MapEncoderCNN, MapEncoderPts, MapEncoderPtsMA
 
 def init(module, weight_init, bias_init, gain=1):
     weight_init(module.weight.data, gain=gain)
@@ -72,13 +88,39 @@ class OutputModel(nn.Module):
             return torch.stack([x_mean, y_mean, x_sigma, y_sigma, rho], dim=2)
 
 
-class AutoBotJoint(nn.Module):
+class AutoBotJoint(TorchModuleWrapper):
     '''
     AutoBot-Joint Class.
     '''
-    def __init__(self, d_k=128, _M=5, c=5, T=30, L_enc=1, dropout=0.0, k_attr=2, map_attr=3, num_heads=16, L_dec=1,
+    def __init__(self,
+        vector_map_feature_radius: int,
+        vector_map_connection_scales: Optional[List[int]],
+        past_trajectory_sampling: TrajectorySampling,
+        future_trajectory_sampling: TrajectorySampling,
+         d_k=128, _M=5, c=5, T=30, L_enc=1, dropout=0.0, k_attr=2, map_attr=3, num_heads=16, L_dec=1,
                  tx_hidden_size=384, use_map_lanes=False, num_agent_types=None, predict_yaw=False):
-        super(AutoBotJoint, self).__init__()
+        
+
+        self.converter = NuplanToAutobotsConverter(_M=_M)
+        
+        super(AutoBotJoint, self).__init__(
+            feature_builders=[
+                AutobotsMapFeatureBuilder(
+                    radius=vector_map_feature_radius,
+                    connection_scales=vector_map_connection_scales,
+                    converter=self.converter,
+                ),
+                VectorMapFeatureBuilder(
+                    radius=vector_map_feature_radius,
+                    connection_scales=vector_map_connection_scales,
+                ),
+                AgentsFeatureBuilder(trajectory_sampling=past_trajectory_sampling),
+            ],
+            target_builders=[EgoTrajectoryTargetBuilder(future_trajectory_sampling=future_trajectory_sampling),
+             AutobotsPredNominalTargetBuilder(), AutobotsModeProbsNominalTargetBuilder(), AutobotsScenarioTypeTargetBuilder()],
+            future_trajectory_sampling=future_trajectory_sampling,
+        )
+
 
         init_ = lambda m: init(m, nn.init.xavier_normal_, lambda x: nn.init.constant_(x, 0), np.sqrt(2))
 
@@ -238,7 +280,7 @@ class AutoBotJoint(nn.Module):
         agents_soc_emb = agents_soc_emb.view(self._M + 1, B, self.T, -1).permute(2, 1, 0, 3)
         return agents_soc_emb
 
-    def forward(self, ego_in, agents_in, roads, agent_types):
+    def forward(self, features: FeaturesType) -> TargetsType:
         '''
         :param ego_in: one agent called ego, shape [B, T_obs, k_attr+1] with last values being the existence mask.
         :param agents_in: other scene agents, shape [B, T_obs, M-1, k_attr+1] with last values being the existence mask.
@@ -250,6 +292,15 @@ class AutoBotJoint(nn.Module):
                                         Bivariate Gaussian distribution (and the yaw prediction if self.predict_yaw).
             mode_probs: shape [B, c] mode probability predictions P(z|X_{1:T_obs})
         '''
+
+        roads = cast(TensorFeature, features["tensor_map"]).data
+
+        agents = cast(Agents, features["agents"])
+        agents_in = self.converter.AgentsToAutobotsAgentsTensor(agents)
+        ego_in= self.converter.AgentsToAutobotsEgoinTensor(agents)
+
+        # TODO: agent types are left out for now.
+
         B = ego_in.size(0)
 
         # Encode all input observations
@@ -274,13 +325,13 @@ class AutoBotJoint(nn.Module):
         context = context.view(ego_in.shape[1], B*self.c, self._M+1, self.d_k)
 
         # embed agent types
-        agent_types_features = self.emb_agent_types(agent_types).unsqueeze(1).\
-            repeat(1, self.c, 1, 1).view(-1, self._M+1, self.d_k)
+        # agent_types_features = self.emb_agent_types(agent_types).unsqueeze(1).\
+            # repeat(1, self.c, 1, 1).view(-1, self._M+1, self.d_k)
         agent_types_features = agent_types_features.unsqueeze(0).repeat(self.T, 1, 1, 1)
 
         # AutoBot-Joint Decoding
         dec_parameters = self.Q.repeat(1, B, 1, self._M+1, 1).view(self.T, B*self.c, self._M+1, -1)
-        dec_parameters = torch.cat((dec_parameters, agent_types_features), dim=-1)
+        # dec_parameters = torch.cat((dec_parameters, agent_types_features), dim=-1)
         dec_parameters = self.dec_agenttypes_encoder(dec_parameters)
         agents_dec_emb = dec_parameters
 

@@ -13,6 +13,7 @@ from nuplan.planning.training.preprocessing.features.trajectory import Trajector
 
 import numpy as np
 
+LIGHTS_ONLY = 3
 ROUTE_AND_LIGHTS = 2
 ROUTE_ONLY = 1
 NEITHER = 0
@@ -115,6 +116,31 @@ class NuplanToAutobotsConverter:
         point_feature_tab[0, :] = torch.zeros((1, 10))
         return point_feature_tab
 
+    def coords_lights_to_map_attr( self, coords, traffic_lights) -> Tensor:
+        """Map coordinates in VectorMap format to AutoBots features
+
+        Args:
+            coords torch.Tensor with shape [num_segments, 2, 2]: one element in coords List of VectorMap
+            on_route torch.Tensor with shape [num_segments, 2]: one element in on_route List of VectorMap
+            traffic_lights torch.Tensor with shape [num_segments, 4]: one element in traffic_lights List of VectorMap
+        Returns:
+            point_feature_tab torch.Tensor with shape [num_segments, 4]: 4 attributes are x, y, angles, existence mask
+        """
+
+        vec = torch.squeeze(coords[:, 1, :]) - torch.squeeze(coords[:, 0, :])
+        
+        angles = torch.atan2(vec[:, 1], vec[:, 0]).reshape((-1, 1))
+
+        # get point feature tabular of shape [p_total, 3]
+        point_feature_tab = torch.cat((torch.squeeze(coords[:, 0, :]), angles, traffic_lights), dim=1)
+        # pad the last dimension with existence mask all being 1
+        point_feature_tab = torch.nn.functional.pad(point_feature_tab, (0, 1), "constant", value=1)
+
+        # [NOTE] omit the first point as [0, 0, 0, 0, 0, 0], which greatly simplify the process and should not affect
+        # too much the training
+        point_feature_tab[0, :] = torch.zeros((1, 8))
+        return point_feature_tab
+
 
     @torch.jit.unused 
     def VectorMapToAutobotsMapTensor( self, vec_map: VectorMap, with_route_traffic_lights=ROUTE_AND_LIGHTS) -> Tensor:
@@ -126,7 +152,7 @@ class NuplanToAutobotsConverter:
                 in coords belonging to the given lane. Each batch contains a List of lane groupings.
 
         Returns:
-            Tensor: shape [B, S, P, map_attr+1] example [64,100,40,4]
+            Tensor: shape [1, S, P, map_attr+1] example [1,100,40,4]
         """
         
         # B = len(vec_map.coords) # get the number of batches
@@ -147,7 +173,7 @@ class NuplanToAutobotsConverter:
         list_idx = [torch.nn.utils.rnn.pad_sequence(sublist, batch_first=True) for sublist in vec_map.lane_groupings]
         # list_idx shape = List[Tensor[num_lane(varies), max_p_num(varies)]] 
         padded_list_idx = [torch.nn.functional.pad(x[:, :min(x.shape[1], self.P)], (0, max(self.P-x.shape[1], 0)), 'constant', 0) for x in list_idx]
-        # list_idx shape = List[Tensor[num_lane(varies), P]]
+        # padded_list_idx shape = List[Tensor[num_lane(varies), P]]
 
         if with_route_traffic_lights == ROUTE_AND_LIGHTS:
             list_of_feature_array = [ self.coords_route_lights_to_map_attr(coords, route, traffic_light_data) for coords, route, traffic_light_data in zip(vec_map.coords, vec_map.on_route_status, vec_map.traffic_light_data)]
@@ -158,6 +184,8 @@ class NuplanToAutobotsConverter:
         elif with_route_traffic_lights == NEITHER:
             list_of_feature_array = [ self.coords_to_map_attr(coord_mat) for coord_mat in vec_map.coords]
             # list_of_feature_array shape : List[Tensor [num_segment(varies), 4]]
+        elif with_route_traffic_lights == LIGHTS_ONLY:
+            list_of_feature_array = [ self.coords_lights_to_map_attr(coords, traffic_light_data) for coords, traffic_light_data in zip(vec_map.coords, vec_map.traffic_light_data)]
         else:
             raise ValueError("with_route_traffic_lights must be one of ROUTE_AND_LIGHTS, ROUTE_ONLY, NEITHER")
             
@@ -174,6 +202,51 @@ class NuplanToAutobotsConverter:
         return map_autobots
 
      
+    @torch.jit.unused 
+    def VectorMapToRouteTensor( self, vec_map: VectorMap) -> Tensor:
+        """_summary_
+
+        Args:
+            coords: List[<np.ndarray: num_lane_segments, 2, 2>].
+                The (x, y) coordinates of the start and end point of the lane segments.
+            lane_groupings: List[List[<np.ndarray: num_lane_segments_in_lane>]].
+                Each lane grouping or polyline is represented by an array of indices of lane segments
+                in coords belonging to the given lane. Each batch contains a List of lane groupings.
+            multi_scale_connections: List[Dict of {scale: connections_of_scale}].
+                Each connections_of_scale is represented by an array of <np.ndarray: num_connections, 2>,
+                and each column in the array is [from_lane_segment_idx, to_lane_segment_idx].
+            on_route_status: List[<np.ndarray: num_lane_segments, 2>].
+                Binary encoding of on route status for lane segment at given index.
+                Encoding: off route [0, 1], on route [1, 0], unknown [0, 0]
+
+        Returns:
+            Tensor: shape [B, S, P, map_attr+1] example [64,100,40,4]
+        """
+        
+        vec_map = vec_map.to_feature_tensor() # to address error: expected Tensor as element 0 in argument 0, but got numpy.ndarray
+        # padded_list_idx shape = List[Tensor[num_lane(varies), P]]
+        list_of_feature_array = [ self.coords_and_route_to_map_attr(coords, route) for coords, route in zip(vec_map.coords, vec_map.on_route_status)]
+        # list_of_feature_array shape : List[Tensor [num_segment(varies), 6]]
+        ret=self.extract_route_lanes(list_of_feature_array) # Tensor(1, P, 3)
+        if ret.dim()==2:
+            ret=ret.unsqueeze(0)
+        return ret
+
+    @torch.jit.unused
+    def extract_route_lanes(self, list_of_feature_array):
+        """
+        list_of_feature_array shape : List[Tensor [num_points(varies), 6]]
+        6 dim: [x, y, heading, on_route, not_on_route, mask]
+        
+        """
+        on_route_true = [torch.where(feature[:, 3]*(~(feature[:, 4]).bool()))[0] for feature in list_of_feature_array]
+        # route_list = [torch.cat((feature[idx.long(), 0:3], feature[idx.long(), -1].unsqueeze(1)), dim=1) for feature, idx in zip(list_of_feature_array, on_route_true)]  # List[Tensor(num_points(varies), 3)]
+        route_list = [feature[idx.long(), 0:3] for feature, idx in zip(list_of_feature_array, on_route_true)]  # List[Tensor(num_points(varies), 3)]
+        cated = torch.cat(route_list, dim=0) # Tensor(num_points(total), 3)
+        padded = torch.nn.functional.pad(cated[:min(cated.shape[0], self.P), :], (0, 0, 0, max(self.P-cated.shape[0], 0)), 'constant', 0) # Tensor(P, 3)
+        return padded
+
+
     @torch.jit.unused
     def AgentsToAutobotsAgentsTensor(self, agents: Agents) -> Tensor:
         """_summary_

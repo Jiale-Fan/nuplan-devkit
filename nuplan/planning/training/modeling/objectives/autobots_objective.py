@@ -65,7 +65,7 @@ class AutobotsObjective(AbstractObjective):
         #                                                                            use_FDEADE_aux_loss=self.use_FDEADE_aux_loss)
 
         # total_loss=nll_loss + adefde_loss + kl_loss
-        # how to implement the gradient clip?
+
 
         # nll_loss: 
 

@@ -92,6 +92,45 @@ class AutobotsMapFeatureBuilder(VectorMapFeatureBuilder):
         return tf
 
 
+class AutobotsRouteFeatureBuilder(VectorMapFeatureBuilder):
+
+    def __init__(self, radius: float, converter: NuplanToAutobotsConverter, connection_scales: Optional[List[int]] = None) -> None:
+        """
+        Initialize vector map builder with configuration parameters.
+        :param radius:  The query radius scope relative to the current ego-pose.
+        :param connection_scales: Connection scales to generate. Use the 1-hop connections if it's left empty.
+        :return: Vector map data including lane segment coordinates and connections within the given range.
+        """
+        super().__init__(radius, connection_scales)
+        self.converter = converter
+
+    @torch.jit.unused
+    def get_feature_type(self) -> Type[AbstractModelFeature]:
+        """Inherited, see superclass."""
+        return TensorFeature # type: ignore
+
+    @torch.jit.unused
+    @classmethod
+    def get_feature_unique_name(cls) -> str:
+        """Inherited, see superclass."""
+        return "tensor_route"
+
+    @torch.jit.unused
+    def get_features_from_scenario(self, scenario: AbstractScenario, with_route_lights = ROUTE_AND_LIGHTS) -> Tensor:
+        vec_map=super(AutobotsRouteFeatureBuilder, self).get_features_from_scenario(scenario)
+        # route_roadblock_ids = scenario.get_route_roadblock_ids()
+        tf=TensorFeature(data=self.converter.VectorMapToRouteTensor(vec_map))
+        return tf
+
+    @torch.jit.unused
+    def get_features_from_simulation(
+        self, current_input: PlannerInput, initialization: PlannerInitialization, with_route_lights = ROUTE_AND_LIGHTS
+    ) -> Tensor:
+        vec_map=super(AutobotsRouteFeatureBuilder, self).get_features_from_simulation(current_input, initialization)
+        tf=TensorFeature(data=self.converter.VectorMapToRouteTensor(vec_map))
+        return tf
+
+
 # This class is unused
 class AutobotsAgentsFeatureBuilder(AgentsFeatureBuilder):
     def __init__(self, trajectory_sampling: TrajectorySampling, converter: NuplanToAutobotsConverter) -> None:
@@ -287,3 +326,5 @@ def scenario_type_one_hot_encoding(scenario_type: str) -> Tensor:
     scenario_type_tensor = torch.zeros(len(SCENARIO_TYPE_ID))
     scenario_type_tensor[SCENARIO_TYPE_ID[scenario_type]] = 1
     return scenario_type_tensor
+
+
