@@ -73,7 +73,7 @@ def simulate(sim_dict: dict) -> str:
         #     if i == -10: break
         checkpoint = sorted((train_experiment_dir / 'best_model').iterdir())[-1]
 
-        checkpoint = sorted((train_experiment_dir / 'checkpoints').iterdir())[-1]
+        # checkpoint = sorted((train_experiment_dir / 'checkpoints').iterdir())[-1]
 
         MODEL_PATH = str(checkpoint).replace("=", "\=")
 

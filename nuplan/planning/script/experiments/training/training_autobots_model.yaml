@@ -21,5 +21,5 @@ defaults:
       - autobots_kl_loss
       - autobots_post_entropy
       - autobots_adefde_loss
-      - autobots_scenario_classification_loss
-      - autobots_scenario_ade_fde_loss
+    #   - autobots_scenario_classification_loss
+    #   - autobots_scenario_ade_fde_loss
