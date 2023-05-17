@@ -227,7 +227,7 @@ class NuplanToAutobotsConverter:
         # padded_list_idx shape = List[Tensor[num_lane(varies), P]]
         list_of_feature_array = [ self.coords_and_route_to_map_attr(coords, route) for coords, route in zip(vec_map.coords, vec_map.on_route_status)]
         # list_of_feature_array shape : List[Tensor [num_segment(varies), 6]]
-        ret=self.extract_route_lanes(list_of_feature_array) # Tensor(1, P, 3)
+        ret=self.extract_route_lanes(list_of_feature_array) # Tensor(1, P, 4)
         if ret.dim()==2:
             ret=ret.unsqueeze(0)
         return ret
@@ -243,7 +243,8 @@ class NuplanToAutobotsConverter:
         # route_list = [torch.cat((feature[idx.long(), 0:3], feature[idx.long(), -1].unsqueeze(1)), dim=1) for feature, idx in zip(list_of_feature_array, on_route_true)]  # List[Tensor(num_points(varies), 3)]
         route_list = [feature[idx.long(), 0:3] for feature, idx in zip(list_of_feature_array, on_route_true)]  # List[Tensor(num_points(varies), 3)]
         cated = torch.cat(route_list, dim=0) # Tensor(num_points(total), 3)
-        padded = torch.nn.functional.pad(cated[:min(cated.shape[0], self.P), :], (0, 0, 0, max(self.P-cated.shape[0], 0)), 'constant', 0) # Tensor(P, 3)
+        padded = torch.nn.functional.pad(cated[:min(cated.shape[0], self.P), :], (0, 1), 'constant', 1) # Tensor(num_points(varies), 4)
+        padded = torch.nn.functional.pad(padded, (0, 0, 0, max(self.P-cated.shape[0], 0)), 'constant', 0) # Tensor(P, 4)
         return padded
 
 
