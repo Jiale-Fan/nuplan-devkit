@@ -438,11 +438,11 @@ class UrbanDriverOpenLoopModel(TorchModuleWrapper):
         # Extract features across batch
         agent_features, agent_avails = self.extract_agent_features(ego_agent_features, batch_size)
         map_features, map_avails = self.extract_map_features(vector_set_map_data, batch_size)
-        features = torch.cat([agent_features, map_features], dim=1)
+        features = torch.cat([agent_features, map_features], dim=1) # [8, 191, 20, 8]
         avails = torch.cat([agent_avails, map_avails], dim=1)
 
         # embed inputs
-        feature_embedding = self.feature_embedding(features)
+        feature_embedding = self.feature_embedding(features) # linear layer
 
         # calculate positional embedding, then transform [num_points, 1, feature_dim] -> [1, 1, num_points, feature_dim]
         pos_embedding = self.positional_embedding(features).unsqueeze(0).transpose(1, 2)
@@ -481,6 +481,6 @@ class UrbanDriverOpenLoopModel(TorchModuleWrapper):
         invalid_polys[:, 0] = 0  # make ego always available in global graph
 
         # global attention layers (transformer)
-        outputs, attns = self.global_head(embeddings, type_embedding, invalid_polys)
+        outputs, attns = self.global_head(embeddings, type_embedding, invalid_polys) # embeddings: [191, 8, 256]
 
         return {"trajectory": Trajectory(data=convert_predictions_to_trajectory(outputs))}

@@ -294,7 +294,7 @@ class LocalSubGraphLayer(nn.Module):
         """
         Forward of the module.
         :param x: Input tensor [num_elements, num_points, dim_in].
-        :param invalid_mask: Invalid mask for x [batch_size, num_elements, num_points].
+        :param invalid_mask: Invalid mask for x [num_elements, num_points].
         :return: Output tensor [num_elements, num_points, dim_out].
         """
         # x input -> num_elements * num_points * embedded_vector_length
@@ -302,7 +302,7 @@ class LocalSubGraphLayer(nn.Module):
         # x mlp -> num_elements * num_points * dim_in
         x = self.mlp(x)
         # compute the masked max for each feature in the sequence
-        masked_x = x.masked_fill(invalid_mask[..., None] > 0, float("-inf"))
+        masked_x = x.masked_fill(invalid_mask[..., None] > 0, float("-inf")) # [856, 20, 256]
         x_agg = masked_x.max(dim=1, keepdim=True).values
         # repeat it along the sequence length
         x_agg = x_agg.repeat(1, num_points, 1)
@@ -347,15 +347,15 @@ class LocalSubGraph(nn.Module):
         """
         batch_size, num_elements, num_points, dim_in = x.shape
 
-        x += pos_enc
+        x += pos_enc # [8,191,20,256]
         # exclude completely invalid sequences from local subgraph to avoid NaN in weights
-        x_flat = x.view(-1, num_points, dim_in)
-        invalid_mask_flat = invalid_mask.view(-1, num_points)
+        x_flat = x.view(-1, num_points, dim_in) # [1528, 20, 256]
+        invalid_mask_flat = invalid_mask.view(-1, num_points) # [1528, 20]
         # (batch_size x (1 + M),)
         valid_polys = ~invalid_mask.all(-1).flatten()
         # valid_seq x seq_len x vector_size
-        x_to_process = x_flat[valid_polys]
-        mask_to_process = invalid_mask_flat[valid_polys]
+        x_to_process = x_flat[valid_polys] # [856, 20, 256]
+        mask_to_process = invalid_mask_flat[valid_polys] # [856, 20]
         for layer in self.layers:
             x_to_process = layer(x_to_process, mask_to_process)
 
@@ -367,7 +367,7 @@ class LocalSubGraph(nn.Module):
         # restore back the batch
         x = torch.zeros_like(x_flat[:, 0])
         x[valid_polys] = x_to_process
-        x = x.view(batch_size, num_elements, self.dim_in)
+        x = x.view(batch_size, num_elements, self.dim_in) # [8, 191, 256]
         return x
 
 
