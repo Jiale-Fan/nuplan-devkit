@@ -8,7 +8,8 @@ defaults:
       - kinematic_history_generic_agent_augmentation
       - generic_agent_dropout_augmentation
   - override /objective:
-      - trajectory_weight_decay_imitation_objective
+    #   - trajectory_weight_decay_imitation_objective
+      - added_metrics_objective
   - override /splitter: nuplan
   - override /model: urban_driver_open_loop_model
   - override /scenario_filter: training_scenarios

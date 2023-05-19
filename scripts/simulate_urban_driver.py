@@ -138,7 +138,7 @@ if __name__ == '__main__':
                 'scenario_builder=nuplan_challenge',  # use nuplan mini database
                 'scenario_filter=nuplan_challenge_scenarios',  # initially select all scenarios in the database
                 'scenario_filter.scenario_types=[starting_left_turn, starting_right_turn, starting_straight_traffic_light_intersection_traversal, stopping_with_lead, high_lateral_acceleration, high_magnitude_speed, low_magnitude_speed, traversing_pickup_dropoff, waiting_for_pedestrian_to_cross, behind_long_vehicle, stationary_in_traffic, near_multiple_vehicles, changing_lane, following_lane_with_lead]',  # select scenario types
-                'scenario_filter.num_scenarios_per_type=10',  # use 10 scenarios per scenario type
+                'scenario_filter.num_scenarios_per_type=1',  # use 10 scenarios per scenario type
             ],
         
             # Name of the experiment
