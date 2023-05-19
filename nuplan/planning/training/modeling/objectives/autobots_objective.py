@@ -55,19 +55,21 @@ class AutobotsObjective(AbstractObjective):
         targets_xy = cast(Trajectory, targets["trajectory"]).data
         scenario_types = cast(TensorFeature, targets["scenario_type"]).data
         
-        self.cross_entropy_weight *= 0.999
+        # self.cross_entropy_weight *= 0.999
 
-        fde_ade_loss, _, weighted_cls_loss  = scenario_specific_loss(pred_obs, targets_xy[:, :, :2], mode_probs, scenario_types, self.cross_entropy_weight)
-        
-        # nll_loss, kl_loss, post_entropy, adefde_loss = nll_loss_multimodes(pred_obs, targets_xy[:, :, :2], mode_probs,
-        #                                                                            entropy_weight=self.entropy_weight,
-        #                                                                            kl_weight=self.kl_weight,
-        #                                                                            use_FDEADE_aux_loss=self.use_FDEADE_aux_loss)
+        # fde_ade_loss, _, weighted_cls_loss  = scenario_specific_loss(pred_obs, targets_xy[:, :, :2], mode_probs, scenario_types, self.cross_entropy_weight)
+        # total_loss = fde_ade_loss + weighted_cls_loss
 
-        # total_loss=nll_loss + adefde_loss + kl_loss
-        # how to implement the gradient clip?
+
+        nll_loss, kl_loss, post_entropy, adefde_loss = nll_loss_multimodes(pred_obs, targets_xy[:, :, :2], mode_probs,
+                                                                                   entropy_weight=self.entropy_weight,
+                                                                                   kl_weight=self.kl_weight,
+                                                                                   use_FDEADE_aux_loss=self.use_FDEADE_aux_loss)
+
+        total_loss=nll_loss + adefde_loss + kl_loss
+
 
         # nll_loss: 
 
-        total_loss = fde_ade_loss + weighted_cls_loss
+        
         return total_loss

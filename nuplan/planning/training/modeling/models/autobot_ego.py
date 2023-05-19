@@ -11,7 +11,7 @@ from nuplan.planning.training.preprocessing.target_builders.ego_trajectory_targe
 
 from nuplan.planning.simulation.trajectory.trajectory_sampling import TrajectorySampling
 from nuplan.planning.training.preprocessing.feature_builders.vector_map_feature_builder import VectorMapFeatureBuilder
-from nuplan.planning.training.preprocessing.feature_builders.autobots_feature_builder import AutobotsMapFeatureBuilder, AutobotsAgentsFeatureBuilder, AutobotsEgoinFeatureBuilder, AutobotsScenarioTypeTargetBuilder
+from nuplan.planning.training.preprocessing.feature_builders.autobots_feature_builder import AutobotsMapFeatureBuilder, AutobotsAgentsFeatureBuilder, AutobotsEgoinFeatureBuilder, AutobotsScenarioTypeTargetBuilder, AutobotsRouteFeatureBuilder
 
 from nuplan.planning.training.preprocessing.features.agents import Agents
 from nuplan.planning.training.preprocessing.features.vector_map import VectorMap
@@ -123,15 +123,24 @@ class AutoBotEgo(TorchModuleWrapper):
         vector_map_connection_scales: Optional[List[int]],
         past_trajectory_sampling: TrajectorySampling,
         future_trajectory_sampling: TrajectorySampling,
-        d_k=128, _M=5, c=5, T=30, L_enc=1, dropout=0.0, k_attr=2, map_attr=3,
+        d_k=128, _M=5, P=600, S=200, c=5, T=30, L_enc=1, dropout=0.0, k_attr=2, map_attr=3,
         num_heads=16, L_dec=1, tx_hidden_size=384, use_map_img=False, use_map_lanes=False, 
         ):
 
-        self.converter = NuplanToAutobotsConverter(_M=_M)
+        
+
+
+
+        self.converter = NuplanToAutobotsConverter(S=S, _M=_M, P=P)
         
         super().__init__(
             feature_builders=[
                 AutobotsMapFeatureBuilder(
+                    radius=vector_map_feature_radius,
+                    connection_scales=vector_map_connection_scales,
+                    converter=self.converter,
+                ),
+                AutobotsRouteFeatureBuilder(
                     radius=vector_map_feature_radius,
                     connection_scales=vector_map_connection_scales,
                     converter=self.converter,
@@ -162,6 +171,9 @@ class AutoBotEgo(TorchModuleWrapper):
         # )
 
         init_ = lambda m: init(m, nn.init.xavier_normal_, lambda x: nn.init.constant_(x, 0), np.sqrt(2))
+
+        self.S = S
+        self.P = P
 
         self.map_attr = map_attr
         self.k_attr = k_attr
@@ -208,6 +220,7 @@ class AutoBotEgo(TorchModuleWrapper):
             self.map_encoder = MapEncoderPts(d_k=d_k, map_attr=map_attr, dropout=self.dropout)
             self.map_attn_layers = nn.MultiheadAttention(self.d_k, num_heads=self.num_heads, dropout=0.3)
 
+
         # ============================== AutoBot-Ego DECODER ==============================
         self.Q = nn.Parameter(torch.Tensor(self.T, 1, self.c, self.d_k), requires_grad=True)
         nn.init.xavier_uniform_(self.Q)
@@ -219,6 +232,17 @@ class AutoBotEgo(TorchModuleWrapper):
                                                               dim_feedforward=self.tx_hidden_size))
         self.tx_decoder = nn.ModuleList(self.tx_decoder)
 
+
+        # ============================== Route ENCODER ==============================
+        # self.route_encoder = nn.Sequential(
+        #     init_(nn.Linear(self.map_attr*self.P, d_k)), nn.ReLU(),
+        #     init_(nn.Linear(d_k, d_k))
+        # )
+        self.route_encoder = MapEncoderPts(d_k=d_k, map_attr=map_attr, dropout=self.dropout)
+        self.route_decoder = nn.TransformerDecoderLayer(d_model=self.d_k, nhead=self.num_heads,
+                                                              dropout=self.dropout,
+                                                              dim_feedforward=self.tx_hidden_size)
+
         # ============================== Positional encoder ==============================
         self.pos_encoder = PositionalEncoding(d_k, dropout=0.0)
 
@@ -229,8 +253,8 @@ class AutoBotEgo(TorchModuleWrapper):
         self.output_model = OutputModel(d_k=self.d_k)
 
         # ============================== Mode Prob prediction (P(z|X_1:t)) ==============================
-        self.P = nn.Parameter(torch.Tensor(c, 1, d_k), requires_grad=True)  # Appendix C.2.
-        nn.init.xavier_uniform_(self.P)
+        self.seed_parameters = nn.Parameter(torch.Tensor(c, 1, d_k), requires_grad=True)  # Appendix C.2.
+        nn.init.xavier_uniform_(self.seed_parameters)
 
         if self.use_map_img:
             self.modemap_net = nn.Sequential(
@@ -313,6 +337,7 @@ class AutoBotEgo(TorchModuleWrapper):
                         }
         """
         roads = cast(TensorFeature, features["tensor_map"]).data
+        route = cast(TensorFeature, features["tensor_route"]).data # [B, 1, P, 3]
 
         agents = cast(Agents, features["agents"])
         agents_in = self.converter.AgentsToAutobotsAgentsTensor(agents)
@@ -356,9 +381,17 @@ class AutoBotEgo(TorchModuleWrapper):
             # [TODO] only add the ego agent's route with learned positional encoding.
             # 
             # roads = self.pos_encoder_route(roads)
+            
+
             orig_map_features, orig_road_segs_masks = self.map_encoder(roads, ego_soctemp_emb)
             map_features = orig_map_features.unsqueeze(2).repeat(1, 1, self.c, 1).view(-1, B*self.c, self.d_k)
             road_segs_masks = orig_road_segs_masks.unsqueeze(1).repeat(1, self.c, 1).view(B*self.c, -1)
+
+            # ----------------- #
+            orig_route_features, orig_route_segs_masks = self.route_encoder(route, ego_soctemp_emb)
+            route_features = orig_route_features.unsqueeze(2).repeat(1, 1, self.c, 1).view(-1, B*self.c, self.d_k)
+            route_segs_masks = orig_route_segs_masks.unsqueeze(1).repeat(1, self.c, 1).view(B*self.c, -1)
+            # ----------------- #
 
         # Repeat the tensors for the number of modes for efficient forward pass.
         context = ego_soctemp_emb.unsqueeze(2).repeat(1, 1, self.c, 1)
@@ -375,11 +408,28 @@ class AutoBotEgo(TorchModuleWrapper):
                 ego_dec_emb_map = self.map_attn_layers(query=out_seq, key=map_features, value=map_features,
                                                        key_padding_mask=road_segs_masks)[0]
                 out_seq = out_seq + ego_dec_emb_map
-            out_seq = self.tx_decoder[d](out_seq, context, tgt_mask=time_masks, memory_key_padding_mask=env_masks)
-        out_dists = self.output_model(out_seq).reshape(self.T, B, self.c, -1).permute(2, 0, 1, 3)
+            out_seq = self.tx_decoder[d](out_seq, context, tgt_mask=time_masks, memory_key_padding_mask=env_masks) # [T, B*c, d_k]
+
+
+
+        # ------------------------------------------------------------------
+        out_seq = out_seq+route_features
+        out_seq = self.route_decoder(out_seq, context, tgt_mask=time_masks, memory_key_padding_mask=env_masks) # [T, B*c, d_k]
+        # TODO: add positional encoding
+        # embed the route from [B, P, 3] to [?, B*c, d_k]
+
+        # route = route.view(B, -1) # [B, P, 3] --> [B, P*3]
+        # route_emb = self.route_encoder(route) # [B, P*3] --> [B, d_k]
+        # route_emb = route_emb.unsqueeze(1).repeat(1, self.c, 1).view(-1, B*self.c, self.d_k) # [B, d_k] --> [1, B*c, d_k]
+        # # decode with route: route_emb should be [?, B*c, d_k]
+        # out_seq = self.route_decoder(tgt=out_seq, memory=route_features, tgt_mask=time_masks)
+
+        # ------------------------------------------------------------------
+
+        out_dists = self.output_model(out_seq).reshape(self.T, B, self.c, -1).permute(2, 0, 1, 3) # out_seq [T, B*c, d_k] --> [c, T, B, 5]
 
         # Mode prediction
-        mode_params_emb = self.P.repeat(1, B, 1)
+        mode_params_emb = self.seed_parameters.repeat(1, B, 1)
         mode_params_emb = self.prob_decoder(query=mode_params_emb, key=ego_soctemp_emb, value=ego_soctemp_emb)[0]
         if self.use_map_img:
             mode_params_emb = self.modemap_net(torch.cat((mode_params_emb, orig_map_features.transpose(0, 1)), dim=-1))

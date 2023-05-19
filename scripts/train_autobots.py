@@ -6,11 +6,7 @@ from omegaconf import DictConfig
 import tempfile
 import warnings
 import ray
-# to run tensorboard:
-# tensorboard --logdir=/data1/nuplan/jiale/exp/autobots_experiment/autobots_model
 
-# to clear the cache:
-# sudo rm -r /data1/nuplan/jiale/exp/cache
 
 def train_autobots(sim_dict: dict) -> str:
     # Location of path with all simulation configs
@@ -99,28 +95,19 @@ if __name__ == '__main__':
         warnings.filterwarnings("ignore", category=RuntimeWarning)
         train_autobots(train_dict)
         ray.shutdown()
-    """
-    
-    TODO: cut modes number to 6
-    TODO: increase encoder/decoder layer number
-    """
-    
-    
+ 
     """
 
-conda activate nuplan
-cd ~/Documents/master/nuplan-devkit
-python ./scripts/train_autobots.py 
+    conda activate nuplan
+    cd ~/Documents/master/nuplan-devkit
+    python ./scripts/train_autobots.py 
 
 
     """
 
 
-    """
-    
-    RuntimeError: Failed to compute features for scenario token f35c81eeb76759fc in log 2021.08.20.18.15.01_veh-28_00016_00436
-    Error: Ran out of input
+# to run tensorboard:
+# tensorboard --logdir=/data1/nuplan/jiale/exp/autobots_experiment/autobots_model
 
-    
-    
-    """
+# to clear the cache:
+# sudo rm -r /data1/nuplan/jiale/exp/cache
