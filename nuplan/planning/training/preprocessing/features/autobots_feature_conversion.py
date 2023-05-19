@@ -258,9 +258,9 @@ class NuplanToAutobotsConverter:
         """take the trajectory with maximum probability
 
         Args:
-            pred_obs: shape [c, T, B, 5] c trajectories for the ego agents with every point being the params of
+            pred_obs: shape [c*6, T, B, 5] c trajectories for the ego agents with every point being the params of
                                             Bivariate Gaussian distribution.
-            mode_probs: shape [B, c] mode probability predictions P(z|X_{1:T_obs})
+            mode_probs: shape [B, c*6] mode probability predictions P(z|X_{1:T_obs})
         """
 
         most_likely_idx=torch.argmax(mode_probs, 1)

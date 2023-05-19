@@ -50,22 +50,22 @@ def nll_pytorch_dist(pred, data, rtn_loss=True):
 def scenario_specific_loss(pred, data, modes_pred: Tensor, scenario_types, cross_entropy_weight=1.0):
     """
     Args:
-      pred: [K, T, B, 5]
+      pred: [K*6, T, B, 5]
       data: [B, T, 5] # should be [B, T, 2], ground truth
-      modes_pred: [B, K], prior prob over modes
+      modes_pred: [B, K*6], prior prob over modes
+      scenario_types: [B], scenario type for each batch
       
     """
     B = modes_pred.shape[0]
+
+    modes_pred_summed = modes_pred.reshape(B, 6, -1).sum(1) # [B, K]
+
     cls_loss_fn = torch.nn.CrossEntropyLoss()
-    cls_loss = cls_loss_fn(modes_pred, scenario_types)
-    fde_loss = 0
-    ade_loss = 0
+    cls_loss = cls_loss_fn(modes_pred_summed, scenario_types)
+    fde_ade_loss = 0
     for b in range(B):
-        fde_loss += torch.norm((pred[scenario_types[b], -1, :, :2] - data[:, -1, :2]), 2, dim=-1) # should be [B]
-        ade_loss += torch.norm((pred[scenario_types[b], :, :, :2].transpose(0, 1) - data[:, :, :2]), 2, dim=-1).mean(dim=-1) # should be [B]
-    # loss, min_inds = (fde_loss + ade_loss).min(dim=1)
-    # return 100.0 * loss.mean()
-    fde_ade_loss = 100*(fde_loss + ade_loss).mean()
+        fde_ade_loss += l2_loss_fde(pred[scenario_types[b]:scenario_types[b]+6], data)
+
     return fde_ade_loss, cross_entropy_weight, cross_entropy_weight * cls_loss
 
 
