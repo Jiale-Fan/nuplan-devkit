@@ -4,7 +4,9 @@ _convert_: 'all'
 # Model setup
 d_k: 128 # hidden_size
 _M: 100 # num_other_agents
-c: 84 # num_modes
+scenario_type_num: 14
+mode_num_per_scenario_type: 6
+# c: 84 # num_modes
 T: 16
 L_enc: 3
 dropout: 0.1

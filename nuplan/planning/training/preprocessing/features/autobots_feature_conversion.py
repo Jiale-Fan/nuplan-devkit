@@ -328,18 +328,25 @@ class NuplanToAutobotsConverter:
 
      
     @torch.jit.unused
-    def output_tensor_to_trajectory( self, pred_obs: Tensor, mode_probs: Tensor) -> Trajectory:
+    def output_tensor_to_trajectory( self, pred_obs: Tensor, mode_probs: Tensor, scenario_probs: Tensor) -> Trajectory:
         """take the trajectory with maximum probability
 
         Args:
             pred_obs: shape [c*6, T, B, 5] c trajectories for the ego agents with every point being the params of
                                             Bivariate Gaussian distribution.
             mode_probs: shape [B, c*6] mode probability predictions P(z|X_{1:T_obs})
+            scenario_probs: shape [B, c]
         """
+        predicted_scenarios = torch.argmax(scenario_probs, -1) # shape [B]
+        mode_probs_reshape = mode_probs.view(-1, 14, 6) # shape [B, 14, 6]
 
-        most_likely_idx=torch.argmax(mode_probs, 1)
+        mode_probs_filtered = mode_probs_reshape[torch.arange(mode_probs_reshape.shape[0]), predicted_scenarios, :] # shape [B, 6]
+        most_likely_idx=torch.argmax(mode_probs_filtered, -1) # shape [B]
+
+        preds_reshape = pred_obs.view(14, 6, pred_obs.shape[1], pred_obs.shape[2], pred_obs.shape[3])
+
         # for each batch, pick the trajectory with largest probability
-        trajs=torch.stack([pred_obs[most_likely_idx[i],:,i,:] for i in range(pred_obs.shape[2])])
+        trajs=torch.stack([preds_reshape[predicted_scenarios[i],most_likely_idx[i],:,i,:] for i in range(pred_obs.shape[2])])
 
         trajs_3=trajs[:,:,:3]
 

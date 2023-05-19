@@ -246,7 +246,7 @@ class AutobotsScenarioClassificationLoss(AbstractTrainingMetric):
         
         """
 
-        mode_probs = cast(TensorFeature, predictions["mode_probs"]).data
+        mode_probs = cast(TensorFeature, predictions["scenario_type"]).data
         scenario_types = cast(TensorFeature, targets["scenario_type"]).data
         
         cls_loss_fn = torch.nn.CrossEntropyLoss()

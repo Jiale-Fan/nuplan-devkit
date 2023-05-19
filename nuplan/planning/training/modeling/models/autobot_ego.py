@@ -123,8 +123,9 @@ class AutoBotEgo(TorchModuleWrapper):
         vector_map_connection_scales: Optional[List[int]],
         past_trajectory_sampling: TrajectorySampling,
         future_trajectory_sampling: TrajectorySampling,
-        d_k=128, _M=5, P=600, S=200, c=5, T=30, L_enc=1, dropout=0.0, k_attr=2, map_attr=3,
+        d_k=128, _M=5, P=600, S=200, T=30, L_enc=1, dropout=0.0, k_attr=2, map_attr=3,
         num_heads=16, L_dec=1, tx_hidden_size=384, use_map_img=False, use_map_lanes=False, 
+        scenario_type_num = 14, mode_num_per_scenario_type = 6
         ):
 
         
@@ -179,7 +180,8 @@ class AutoBotEgo(TorchModuleWrapper):
         self.k_attr = k_attr
         self.d_k = d_k
         self._M = _M  # num agents without the ego-agent
-        self.c = c
+        self.c = scenario_type_num*mode_num_per_scenario_type
+        self.scenario_type_num = scenario_type_num
         self.T = T
         self.L_enc = L_enc
         self.dropout = dropout
@@ -253,7 +255,7 @@ class AutoBotEgo(TorchModuleWrapper):
         self.output_model = OutputModel(d_k=self.d_k)
 
         # ============================== Mode Prob prediction (P(z|X_1:t)) ==============================
-        self.seed_parameters = nn.Parameter(torch.Tensor(c, 1, d_k), requires_grad=True)  # Appendix C.2.
+        self.seed_parameters = nn.Parameter(torch.Tensor(self.c, 1, d_k), requires_grad=True)  # Appendix C.2.
         nn.init.xavier_uniform_(self.seed_parameters)
 
         if self.use_map_img:
@@ -266,6 +268,9 @@ class AutoBotEgo(TorchModuleWrapper):
 
         self.prob_decoder = nn.MultiheadAttention(self.d_k, num_heads=self.num_heads, dropout=self.dropout)
         self.prob_predictor = init_(nn.Linear(self.d_k, 1))
+
+        # ------------------------------ Scenario-type prediction --------------------------------
+        self.scenario_type_predictor = init_(nn.Linear(self.c, self.scenario_type_num))
 
         self.train()
 
@@ -436,14 +441,23 @@ class AutoBotEgo(TorchModuleWrapper):
         elif self.use_map_lanes:
             mode_params_emb = self.mode_map_attn(query=mode_params_emb, key=orig_map_features, value=orig_map_features,
                                                  key_padding_mask=orig_road_segs_masks)[0] + mode_params_emb
-        mode_probs = F.softmax(self.prob_predictor(mode_params_emb).squeeze(-1), dim=0).transpose(0, 1)
+        # mode_params_emb [84, 8, 128]
+        # self.prob_predictor(mode_params_emb) [84, 8, 1]
 
-        traj=self.converter.output_tensor_to_trajectory(out_dists, mode_probs)
+        mode_prob_before_softmax = self.prob_predictor(mode_params_emb).squeeze(-1).transpose(0, 1) # [B, c]
+        
+        mode_prob_before_softmax_reshape = mode_prob_before_softmax.view(B, self.scenario_type_num, -1)
+        mode_probs = F.softmax(mode_prob_before_softmax_reshape, dim=-1) # [B, K, c_k]
+
+        scenario_type_pred = F.softmax(self.scenario_type_predictor(mode_prob_before_softmax), dim= -1) # [B, scenario_type_num]
+
+        traj=self.converter.output_tensor_to_trajectory(out_dists, mode_probs, scenario_type_pred)
 
         # return  [c, T, B, 5], [B, c]
         # return out_dists, mode_probs
 
-        return {"trajectory": traj, "mode_probs": TensorFeature(data=mode_probs), "pred": TensorFeature(data=out_dists)}
+        return {"trajectory": traj, "mode_probs": TensorFeature(data=mode_probs), "pred": TensorFeature(data=out_dists), 
+                "scenario_type": TensorFeature(data=scenario_type_pred)}
         # return {"trajectory": traj}
 
 

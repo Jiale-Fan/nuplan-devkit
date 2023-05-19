@@ -78,13 +78,13 @@ if __name__ == '__main__':
             # MAX_EPOCHS = 10,
             # BATCH_SIZE = 32,
 
-            SCENARIO_SELECTION = 200000,
-            MAX_EPOCHS = 20,
-            BATCH_SIZE = 32,
+            # SCENARIO_SELECTION = 200000,
+            # MAX_EPOCHS = 20,
+            # BATCH_SIZE = 32,
 
-            # SCENARIO_SELECTION = 2000,
-            # MAX_EPOCHS = 1,
-            # BATCH_SIZE = 8,
+            SCENARIO_SELECTION = 2000,
+            MAX_EPOCHS = 1,
+            BATCH_SIZE = 8,
             
             # add save directory
             SAVE_DIR = '/data1/nuplan/jiale/exp'
