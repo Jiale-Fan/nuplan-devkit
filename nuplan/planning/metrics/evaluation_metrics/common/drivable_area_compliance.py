@@ -14,7 +14,7 @@ from nuplan.planning.metrics.utils.route_extractor import CornersGraphEdgeMapObj
 from nuplan.planning.metrics.utils.state_extractors import extract_ego_corners, extract_ego_time_point
 from nuplan.planning.scenario_builder.abstract_scenario import AbstractScenario
 from nuplan.planning.simulation.history.simulation_history import SimulationHistory
-
+import debugpy
 
 class DrivableAreaComplianceStatistics(MetricBase):
     """Statistics on drivable area compliance of ego."""
@@ -124,6 +124,7 @@ class DrivableAreaComplianceStatistics(MetricBase):
         :return: list of float that shows if corners are in drivable area.
         """
         # Get ego states
+        debugpy.breakpoint()
         ego_states = history.extract_ego_state
         map_api = history.map_api
         all_ego_corners = extract_ego_corners(ego_states)  # 4 corners of oriented box (FL, RL, RR, FR)
@@ -159,6 +160,8 @@ class DrivableAreaComplianceStatistics(MetricBase):
         :param scenario: Scenario running this metric.
         :return: the estimated metric.
         """
+
+        debugpy.breakpoint()
         corners_in_drivable_area, far_from_drivable_area = self.extract_metric(history=history)
 
         statistics = [
@@ -193,5 +196,5 @@ class DrivableAreaComplianceStatistics(MetricBase):
         )
         # Save to load in high level metrics
         self.results.append(corners_statistics_result)
-
+        debugpy.breakpoint()
         return self.results
