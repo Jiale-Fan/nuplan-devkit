@@ -12,15 +12,25 @@ from nuplan.planning.training.preprocessing.target_builders.ego_trajectory_targe
 from nuplan.planning.simulation.trajectory.trajectory_sampling import TrajectorySampling
 from nuplan.planning.training.preprocessing.feature_builders.vector_map_feature_builder import VectorMapFeatureBuilder
 from nuplan.planning.training.preprocessing.feature_builders.autobots_feature_builder import AutobotsMapFeatureBuilder, AutobotsAgentsFeatureBuilder, AutobotsEgoinFeatureBuilder
+from nuplan.planning.training.preprocessing.feature_builders.vector_set_map_feature_builder import VectorSetMapFeatureBuilder
+from nuplan.planning.training.preprocessing.feature_builders.generic_agents_feature_builder import GenericAgentsFeatureBuilder
 
 from nuplan.planning.training.preprocessing.features.agents import Agents
 from nuplan.planning.training.preprocessing.features.vector_map import VectorMap
+from nuplan.planning.training.preprocessing.features.vector_set_map import VectorSetMap
+from nuplan.planning.training.preprocessing.features.generic_agents import GenericAgents
 from nuplan.planning.training.preprocessing.features.tensor_target import TensorFeature
 from nuplan.planning.training.preprocessing.feature_builders.agents_feature_builder import AgentsFeatureBuilder
 from nuplan.planning.training.preprocessing.features.autobots_feature_conversion import NuplanToAutobotsConverter
 from nuplan.planning.training.modeling.types import FeaturesType, TargetsType
+from nuplan.planning.training.modeling.models.urban_driver_open_loop_model import UrbanDriverOpenLoopModelFeatureParams
 
-from typing import List, Optional, cast
+from nuplan.planning.training.modeling.models.urban_driver_open_loop_model_utils import (
+    pad_avails,
+    pad_polylines,
+)
+
+from typing import List, Optional, cast, Tuple, Union
 # from context_encoders import MapEncoderCNN, MapEncoderPts
 from nuplan.planning.training.modeling.models.context_encoders import MapEncoderCNN, MapEncoderPts
 
@@ -123,20 +133,24 @@ class AutoBotEgo(TorchModuleWrapper):
         vector_map_connection_scales: Optional[List[int]],
         past_trajectory_sampling: TrajectorySampling,
         future_trajectory_sampling: TrajectorySampling,
+        feature_params: UrbanDriverOpenLoopModelFeatureParams,
         d_k=128, _M=5, c=5, T=30, L_enc=1, dropout=0.0, k_attr=2, map_attr=3,
         num_heads=16, L_dec=1, tx_hidden_size=384, use_map_img=False, use_map_lanes=False, 
         ):
 
         self.converter = NuplanToAutobotsConverter(_M=_M)
+        self._feature_params = feature_params
         
         super().__init__(
             feature_builders=[
-                AutobotsMapFeatureBuilder(
-                    radius=vector_map_feature_radius,
-                    connection_scales=vector_map_connection_scales,
-                    converter=self.converter,
+                VectorSetMapFeatureBuilder(
+                    map_features=feature_params.map_features,
+                    max_elements=feature_params.max_elements,
+                    max_points=feature_params.max_points,
+                    radius=feature_params.vector_set_map_feature_radius,
+                    interpolation_method=feature_params.interpolation_method,
                 ),
-                AgentsFeatureBuilder(trajectory_sampling=past_trajectory_sampling),
+                GenericAgentsFeatureBuilder(feature_params.agent_features, feature_params.past_trajectory_sampling),
             ],
             target_builders=[EgoTrajectoryTargetBuilder(future_trajectory_sampling=future_trajectory_sampling),
              AutobotsPredNominalTargetBuilder(), AutobotsModeProbsNominalTargetBuilder()],
@@ -293,6 +307,194 @@ class AutoBotEgo(TorchModuleWrapper):
         agents_soc_emb = agents_soc_emb.view(self._M+1, B, T_obs, -1).permute(2, 1, 0, 3)
         return agents_soc_emb
 
+
+    def extract_agent_features(
+        self, ego_agent_features: GenericAgents, batch_size: int
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Extract ego and agent features into format expected by network and build accompanying availability matrix.
+        :param ego_agent_features: agent features to be extracted (ego + other agents)
+        :param batch_size: number of samples in batch to extract
+        :return:
+            agent_features: <torch.FloatTensor: batch_size, num_elements (polylines) (1+max_agents*num_agent_types),
+                num_points_per_element, feature_dimension>. Stacked ego, agent, and map features.
+            agent_avails: <torch.BoolTensor: batch_size, num_elements (polylines) (1+max_agents*num_agent_types),
+                num_points_per_element>. Bool specifying whether feature is available or zero padded.
+        """
+        agent_features = []  # List[<torch.FloatTensor: max_agents+1, total_max_points, feature_dimension>: batch_size]
+        agent_avails = []  # List[<torch.BoolTensor: max_agents+1, total_max_points>: batch_size]
+
+        # features have different size across batch so we use per sample feature extraction
+        for sample_idx in range(batch_size):
+            # Ego features
+            # maintain fixed feature size through trimming/padding
+            sample_ego_feature = ego_agent_features.ego[sample_idx][
+                ..., : min(self._feature_params.ego_dimension, self._feature_params.feature_dimension)
+            ].unsqueeze(0)
+            if (
+                min(self._feature_params.ego_dimension, GenericAgents.ego_state_dim())
+                < self._feature_params.feature_dimension
+            ):
+                sample_ego_feature = pad_polylines(sample_ego_feature, self._feature_params.feature_dimension, dim=2)
+
+            sample_ego_avails = torch.ones(
+                sample_ego_feature.shape[0],
+                sample_ego_feature.shape[1],
+                dtype=torch.bool,
+                device=sample_ego_feature.device,
+            )
+
+            # reverse points so frames are in reverse chronological order, i.e. (t_0, t_-1, ..., t_-N)
+            sample_ego_feature = torch.flip(sample_ego_feature, dims=[1])
+
+            # maintain fixed number of points per polyline
+            sample_ego_feature = sample_ego_feature[:, : self._feature_params.total_max_points, ...]
+            sample_ego_avails = sample_ego_avails[:, : self._feature_params.total_max_points, ...]
+            if sample_ego_feature.shape[1] < self._feature_params.total_max_points:
+                sample_ego_feature = pad_polylines(sample_ego_feature, self._feature_params.total_max_points, dim=1)
+                sample_ego_avails = pad_avails(sample_ego_avails, self._feature_params.total_max_points, dim=1)
+
+            sample_features = [sample_ego_feature]
+            sample_avails = [sample_ego_avails]
+
+            # Agent features
+            for feature_name in self._feature_params.agent_features:
+                # if there exist at least one valid agent in the sample
+                if ego_agent_features.has_agents(feature_name, sample_idx):
+                    # num_frames x num_agents x num_features -> num_agents x num_frames x num_features
+                    sample_agent_features = torch.permute(
+                        ego_agent_features.agents[feature_name][sample_idx], (1, 0, 2)
+                    )
+                    # maintain fixed feature size through trimming/padding
+                    sample_agent_features = sample_agent_features[
+                        ..., : min(self._feature_params.agent_dimension, self._feature_params.feature_dimension)
+                    ]
+                    if (
+                        min(self._feature_params.agent_dimension, GenericAgents.agents_states_dim())
+                        < self._feature_params.feature_dimension
+                    ):
+                        sample_agent_features = pad_polylines(
+                            sample_agent_features, self._feature_params.feature_dimension, dim=2
+                        )
+
+                    sample_agent_avails = torch.ones(
+                        sample_agent_features.shape[0],
+                        sample_agent_features.shape[1],
+                        dtype=torch.bool,
+                        device=sample_agent_features.device,
+                    )
+
+                    # reverse points so frames are in reverse chronological order, i.e. (t_0, t_-1, ..., t_-N)
+                    sample_agent_features = torch.flip(sample_agent_features, dims=[1])
+
+                    # maintain fixed number of points per polyline
+                    sample_agent_features = sample_agent_features[:, : self._feature_params.total_max_points, ...]
+                    sample_agent_avails = sample_agent_avails[:, : self._feature_params.total_max_points, ...]
+                    if sample_agent_features.shape[1] < self._feature_params.total_max_points:
+                        sample_agent_features = pad_polylines(
+                            sample_agent_features, self._feature_params.total_max_points, dim=1
+                        )
+                        sample_agent_avails = pad_avails(
+                            sample_agent_avails, self._feature_params.total_max_points, dim=1
+                        )
+
+                    # maintained fixed number of agent polylines of each type per sample
+                    sample_agent_features = sample_agent_features[: self._feature_params.max_agents, ...]
+                    sample_agent_avails = sample_agent_avails[: self._feature_params.max_agents, ...]
+                    if sample_agent_features.shape[0] < (self._feature_params.max_agents):
+                        sample_agent_features = pad_polylines(
+                            sample_agent_features, self._feature_params.max_agents, dim=0
+                        )
+                        sample_agent_avails = pad_avails(sample_agent_avails, self._feature_params.max_agents, dim=0)
+
+                else:
+                    sample_agent_features = torch.zeros(
+                        self._feature_params.max_agents,
+                        self._feature_params.total_max_points,
+                        self._feature_params.feature_dimension,
+                        dtype=torch.float32,
+                        device=sample_ego_feature.device,
+                    )
+                    sample_agent_avails = torch.zeros(
+                        self._feature_params.max_agents,
+                        self._feature_params.total_max_points,
+                        dtype=torch.bool,
+                        device=sample_agent_features.device,
+                    )
+
+                # add features, avails to sample
+                sample_features.append(sample_agent_features)
+                sample_avails.append(sample_agent_avails)
+
+            sample_features = torch.cat(sample_features, dim=0)
+            sample_avails = torch.cat(sample_avails, dim=0)
+
+            agent_features.append(sample_features)
+            agent_avails.append(sample_avails)
+        agent_features = torch.stack(agent_features)
+        agent_avails = torch.stack(agent_avails)
+
+        return agent_features, agent_avails
+
+    def extract_map_features(
+        self, vector_set_map_data: VectorSetMap, batch_size: int
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Extract map features into format expected by network and build accompanying availability matrix.
+        :param vector_set_map_data: VectorSetMap features to be extracted
+        :param batch_size: number of samples in batch to extract
+        :return:
+            map_features: <torch.FloatTensor: batch_size, num_elements (polylines) (max_lanes),
+                num_points_per_element, feature_dimension>. Stacked map features.
+            map_avails: <torch.BoolTensor: batch_size, num_elements (polylines) (max_lanes),
+                num_points_per_element>. Bool specifying whether feature is available or zero padded.
+        """
+        map_features = []  # List[<torch.FloatTensor: max_map_features, total_max_points, feature_dim>: batch_size]
+        map_avails = []  # List[<torch.BoolTensor: max_map_features, total_max_points>: batch_size]
+
+        # features have different size across batch so we use per sample feature extraction
+        for sample_idx in range(batch_size):
+
+            sample_map_features = []
+            sample_map_avails = []
+
+            for feature_name in self._feature_params.map_features:
+                coords = vector_set_map_data.coords[feature_name][sample_idx]
+                tl_data = (
+                    vector_set_map_data.traffic_light_data[feature_name][sample_idx]
+                    if feature_name in vector_set_map_data.traffic_light_data
+                    else None
+                )
+                avails = vector_set_map_data.availabilities[feature_name][sample_idx]
+
+                # add traffic light data if exists for feature
+                if tl_data is not None:
+                    coords = torch.cat((coords, tl_data), dim=2)
+
+                # maintain fixed number of points per map element (polyline)
+                coords = coords[:, : self._feature_params.total_max_points, ...]
+                avails = avails[:, : self._feature_params.total_max_points]
+
+                if coords.shape[1] < self._feature_params.total_max_points:
+                    coords = pad_polylines(coords, self._feature_params.total_max_points, dim=1)
+                    avails = pad_avails(avails, self._feature_params.total_max_points, dim=1)
+
+                # maintain fixed number of features per point
+                coords = coords[..., : self._feature_params.feature_dimension]
+                if coords.shape[2] < self._feature_params.feature_dimension:
+                    coords = pad_polylines(coords, self._feature_params.feature_dimension, dim=2)
+
+                sample_map_features.append(coords)
+                sample_map_avails.append(avails)
+
+            map_features.append(torch.cat(sample_map_features))
+            map_avails.append(torch.cat(sample_map_avails))
+
+        map_features = torch.stack(map_features)
+        map_avails = torch.stack(map_avails)
+
+        return map_features, map_avails
+
     def forward(self, features: FeaturesType) -> TargetsType:
         """
         Predict
@@ -308,11 +510,36 @@ class AutoBotEgo(TorchModuleWrapper):
                             "pred": TensorTarget(data=out_dists)
                         }
         """
-        roads = cast(TensorFeature, features["tensor_map"]).data
+        vector_set_map_data = cast(VectorSetMap, features["vector_set_map"])
+        ego_agent_features = cast(GenericAgents, features["generic_agents"])
+        batch_size = ego_agent_features.batch_size
 
-        agents = cast(Agents, features["agents"])
-        agents_in = self.converter.AgentsToAutobotsAgentsTensor(agents)
-        ego_in= self.converter.AgentsToAutobotsEgoinTensor(agents)
+        # Extract features across batch
+        agent_features, agent_avails = self.extract_agent_features(ego_agent_features, batch_size)
+        map_in, map_avails = self.extract_map_features(vector_set_map_data, batch_size)
+
+
+        #     agent_features: <torch.FloatTensor: batch_size, num_elements (polylines) (1+max_agents*num_agent_types),
+        #         num_points_per_element, feature_dimension>. Stacked ego, agent, and map features.
+        #     agent_avails: <torch.BoolTensor: batch_size, num_elements (polylines) (1+max_agents*num_agent_types),
+        #         num_points_per_element>. Bool specifying whether feature is available or zero padded.
+        #     map_features: <torch.FloatTensor: batch_size, num_elements (polylines) (max_lanes),
+        #         num_points_per_element, feature_dimension>. Stacked map features.
+        #     map_avails: <torch.BoolTensor: batch_size, num_elements (polylines) (max_lanes),
+        #         num_points_per_element>. Bool specifying whether feature is available or zero padded.
+
+
+
+        # roads = cast(TensorFeature, features["tensor_map"]).data
+        # agents = cast(Agents, features["agents"])
+        # agents_in = self.converter.AgentsToAutobotsAgentsTensor(agents)
+        # ego_in= self.converter.AgentsToAutobotsEgoinTensor(agents)
+
+        roads = torch.cat((map_in, map_avails.unsqueeze(-1)), dim=3) # [8, 160, 20, 9]
+        agents_in_and_ego = torch.cat((agent_features[:,:,:,:3], agent_avails.unsqueeze(-1)), dim=3).transpose(1, 2)  # agent features' feature dimension from 3 to 8 are padded with 0s.
+        ego_in = agents_in_and_ego[:, :, 0, :] # [8, 20, 9]
+        agents_in = agents_in_and_ego[:, :, 1:, :] # [8, 20, 30, 9]
+        
         
         '''
         :param ego_in: [B, T_obs, k_attr+1] with last values being the existence mask. 
