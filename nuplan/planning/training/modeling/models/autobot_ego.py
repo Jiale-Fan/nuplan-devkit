@@ -33,7 +33,7 @@ from nuplan.planning.training.modeling.models.urban_driver_open_loop_model_utils
 from typing import List, Optional, cast, Tuple, Union
 # from context_encoders import MapEncoderCNN, MapEncoderPts
 from nuplan.planning.training.modeling.models.context_encoders import MapEncoderCNN, MapEncoderPts
-
+from nuplan.planning.training.preprocessing.features.trajectory import Trajectory
 
 def init(module, weight_init, bias_init, gain=1):
     '''
@@ -85,7 +85,7 @@ class OutputModel(nn.Module):
         self.observation_model = nn.Sequential(
             init_(nn.Linear(d_k, d_k)), nn.ReLU(),
             init_(nn.Linear(d_k, d_k)), nn.ReLU(),
-            init_(nn.Linear(d_k, 5))
+            init_(nn.Linear(d_k, 3))
         )
         self.min_stdev = 0.01
 
@@ -94,12 +94,14 @@ class OutputModel(nn.Module):
         BK = agent_decoder_state.shape[1]
         pred_obs = self.observation_model(agent_decoder_state.reshape(-1, self.d_k)).reshape(T, BK, -1)
 
-        x_mean = pred_obs[:, :, 0]
-        y_mean = pred_obs[:, :, 1]
-        x_sigma = F.softplus(pred_obs[:, :, 2]) + self.min_stdev
-        y_sigma = F.softplus(pred_obs[:, :, 3]) + self.min_stdev
-        rho = torch.tanh(pred_obs[:, :, 4]) * 0.9  # for stability
-        return torch.stack([x_mean, y_mean, x_sigma, y_sigma, rho], dim=2)
+        # x_mean = pred_obs[:, :, 0]
+        # y_mean = pred_obs[:, :, 1]
+        # x_sigma = F.softplus(pred_obs[:, :, 2]) + self.min_stdev
+        # y_sigma = F.softplus(pred_obs[:, :, 3]) + self.min_stdev
+        # rho = torch.tanh(pred_obs[:, :, 4]) * 0.9  # for stability
+        # return torch.stack([x_mean, y_mean, x_sigma, y_sigma, rho], dim=2)
+
+        return pred_obs
 
 
 class AutoBotEgo(TorchModuleWrapper):
@@ -130,8 +132,7 @@ class AutoBotEgo(TorchModuleWrapper):
                 ),
                 GenericAgentsFeatureBuilder(feature_params.agent_features, feature_params.past_trajectory_sampling),
             ],
-            target_builders=[EgoTrajectoryTargetBuilder(future_trajectory_sampling=future_trajectory_sampling),
-             AutobotsPredNominalTargetBuilder(), AutobotsModeProbsNominalTargetBuilder()],
+            target_builders=[EgoTrajectoryTargetBuilder(future_trajectory_sampling=future_trajectory_sampling)],
             future_trajectory_sampling=future_trajectory_sampling,
         )
 
@@ -196,9 +197,11 @@ class AutoBotEgo(TorchModuleWrapper):
             self.map_encoder = MapEncoderPts(d_k=d_k, map_attr=map_attr, dropout=self.dropout)
             self.map_attn_layers = nn.MultiheadAttention(self.d_k, num_heads=self.num_heads, dropout=0.3)
 
+            self.map_encoder_route = MapEncoderPts(d_k=d_k, map_attr=map_attr, dropout=self.dropout)
+
         # ============================== AutoBot-Ego DECODER ==============================
-        self.Q = nn.Parameter(torch.Tensor(self.T, 1, self.c, self.d_k), requires_grad=True)
-        nn.init.xavier_uniform_(self.Q)
+        # self.Q = nn.Parameter(torch.Tensor(self.T, 1, self.c, self.d_k), requires_grad=True) # [T, 1, c, d_k]
+        # nn.init.xavier_uniform_(self.Q)
 
         self.tx_decoder = []
         for _ in range(self.L_dec):
@@ -218,19 +221,19 @@ class AutoBotEgo(TorchModuleWrapper):
         self.output_model = OutputModel(d_k=self.d_k)
 
         # ============================== Mode Prob prediction (P(z|X_1:t)) ==============================
-        self.P = nn.Parameter(torch.Tensor(c, 1, d_k), requires_grad=True)  # Appendix C.2.
-        nn.init.xavier_uniform_(self.P)
+        # self.P = nn.Parameter(torch.Tensor(c, 1, d_k), requires_grad=True)  # Appendix C.2.
+        # nn.init.xavier_uniform_(self.P)
 
-        if self.use_map_img:
-            self.modemap_net = nn.Sequential(
-                init_(nn.Linear(2*self.d_k, self.d_k)), nn.ReLU(),
-                init_(nn.Linear(self.d_k, self.d_k))
-            )
-        elif self.use_map_lanes:
-            self.mode_map_attn = nn.MultiheadAttention(self.d_k, num_heads=self.num_heads)
+        # if self.use_map_img:
+        #     self.modemap_net = nn.Sequential(
+        #         init_(nn.Linear(2*self.d_k, self.d_k)), nn.ReLU(),
+        #         init_(nn.Linear(self.d_k, self.d_k))
+        #     )
+        # elif self.use_map_lanes:
+        #     self.mode_map_attn = nn.MultiheadAttention(self.d_k, num_heads=self.num_heads)
 
-        self.prob_decoder = nn.MultiheadAttention(self.d_k, num_heads=self.num_heads, dropout=self.dropout)
-        self.prob_predictor = init_(nn.Linear(self.d_k, 1))
+        # self.prob_decoder = nn.MultiheadAttention(self.d_k, num_heads=self.num_heads, dropout=self.dropout)
+        # self.prob_predictor = init_(nn.Linear(self.d_k, 1))
 
         self.train()
 
@@ -519,6 +522,10 @@ class AutoBotEgo(TorchModuleWrapper):
         ego_in = agents_in_and_ego[:, :, 0, :] # [8, 20, 9]
         agents_in = agents_in_and_ego[:, :, 1:, :] # [8, 20, 30, 9]
         
+
+        # ---- split route and lanes
+        route = roads[:, -self._feature_params.max_elements['ROUTE_LANES']:, :, :]
+        roads = roads[:, :-self._feature_params.max_elements['ROUTE_LANES'], :, :]
         
         '''
         :param ego_in: [B, T_obs, k_attr+1] with last values being the existence mask. 
@@ -562,13 +569,18 @@ class AutoBotEgo(TorchModuleWrapper):
             map_features = orig_map_features.unsqueeze(2).repeat(1, 1, self.c, 1).view(-1, B*self.c, self.d_k)
             road_segs_masks = orig_road_segs_masks.unsqueeze(1).repeat(1, self.c, 1).view(B*self.c, -1)
 
+            orig_route_features, _ = self.map_encoder_route(route, ego_soctemp_emb)
+            out_seq = orig_route_features.unsqueeze(2).repeat(1, 1, self.c, 1).view(-1, B*self.c, self.d_k)
+
         # Repeat the tensors for the number of modes for efficient forward pass.
         context = ego_soctemp_emb.unsqueeze(2).repeat(1, 1, self.c, 1)
         context = context.view(-1, B*self.c, self.d_k)
 
         # AutoBot-Ego Decoding
-        out_seq = self.Q.repeat(1, B, 1, 1).view(self.T, B*self.c, -1)
-        time_masks = self.generate_decoder_mask(seq_len=self.T, device=ego_in.device)
+        # encode route information to tensor shaped [B, S, P, d_f] -> [T, B, d_k]
+        # out_seq = self.Q.repeat(1, B, 1, 1).view(self.T, B*self.c, -1) # [T, B*c, d_k]
+
+        # time_masks = self.generate_decoder_mask(seq_len=self.T, device=ego_in.device)
         for d in range(self.L_dec):
             if self.use_map_img and d == 1:
                 ego_dec_emb_map = torch.cat((out_seq, map_features), dim=-1)
@@ -577,25 +589,30 @@ class AutoBotEgo(TorchModuleWrapper):
                 ego_dec_emb_map = self.map_attn_layers(query=out_seq, key=map_features, value=map_features,
                                                        key_padding_mask=road_segs_masks)[0]
                 out_seq = out_seq + ego_dec_emb_map
-            out_seq = self.tx_decoder[d](out_seq, context, tgt_mask=time_masks, memory_key_padding_mask=env_masks)
-        out_dists = self.output_model(out_seq).reshape(self.T, B, self.c, -1).permute(2, 0, 1, 3)
+            out_seq = self.tx_decoder[d](out_seq, context, memory_key_padding_mask=env_masks)
+        out_dists = self.output_model(out_seq).reshape(self.T, B, self.c, -1).permute(2, 0, 1, 3) # self.output_model(out_seq) [30, 8, 5] -> [16, 8, 1, 5]
+        
+        out_dists_permuted = out_dists.squeeze(0).permute(1, 0, 2) # [8, 16, 5]
+
+        traj = Trajectory(data=out_dists_permuted)
+
 
         # Mode prediction
-        mode_params_emb = self.P.repeat(1, B, 1)
-        mode_params_emb = self.prob_decoder(query=mode_params_emb, key=ego_soctemp_emb, value=ego_soctemp_emb)[0]
-        if self.use_map_img:
-            mode_params_emb = self.modemap_net(torch.cat((mode_params_emb, orig_map_features.transpose(0, 1)), dim=-1))
-        elif self.use_map_lanes:
-            mode_params_emb = self.mode_map_attn(query=mode_params_emb, key=orig_map_features, value=orig_map_features,
-                                                 key_padding_mask=orig_road_segs_masks)[0] + mode_params_emb
-        mode_probs = F.softmax(self.prob_predictor(mode_params_emb).squeeze(-1), dim=0).transpose(0, 1)
+        # mode_params_emb = self.P.repeat(1, B, 1)
+        # mode_params_emb = self.prob_decoder(query=mode_params_emb, key=ego_soctemp_emb, value=ego_soctemp_emb)[0]
+        # if self.use_map_img:
+        #     mode_params_emb = self.modemap_net(torch.cat((mode_params_emb, orig_map_features.transpose(0, 1)), dim=-1))
+        # elif self.use_map_lanes:
+        #     mode_params_emb = self.mode_map_attn(query=mode_params_emb, key=orig_map_features, value=orig_map_features,
+        #                                          key_padding_mask=orig_road_segs_masks)[0] + mode_params_emb
+        # mode_probs = F.softmax(self.prob_predictor(mode_params_emb).squeeze(-1), dim=0).transpose(0, 1)
 
-        traj=self.converter.output_tensor_to_trajectory(out_dists, mode_probs)
+        # traj=self.converter.output_tensor_to_trajectory(out_dists, mode_probs)
 
         # return  [c, T, B, 5], [B, c]
         # return out_dists, mode_probs
 
-        return {"trajectory": traj, "mode_probs": TensorFeature(data=mode_probs), "pred": TensorFeature(data=out_dists)}
-        # return {"trajectory": traj}
+        # return {"trajectory": traj, "mode_probs": TensorFeature(data=mode_probs), "pred": TensorFeature(data=out_dists)}
+        return {"trajectory": traj}
 
 

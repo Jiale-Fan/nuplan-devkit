@@ -4,7 +4,7 @@ _convert_: 'all'
 # Model setup
 d_k: 128 # hidden_size
 _M: 30 # num_other_agents
-c: 6 # num_modes
+c: 1 # num_modes
 T: 16
 L_enc: 4
 dropout: 0.1
@@ -62,14 +62,16 @@ feature_params:
     num_poses: 4      # target future poses
     time_horizon: 1.5  # [s] time horizon of future poses
   # Map features
-  map_features: [LANE, LEFT_BOUNDARY, RIGHT_BOUNDARY, STOP_LINE, CROSSWALK, ROUTE_LANES]
+  # map_features: [LANE, LEFT_BOUNDARY, RIGHT_BOUNDARY, STOP_LINE, CROSSWALK, ROUTE_LANES]
+
+  map_features: [LANE, ROUTE_LANES]
   max_elements:
     LANE: 30
     LEFT_BOUNDARY: 30
     RIGHT_BOUNDARY: 30
     STOP_LINE: 20
     CROSSWALK: 20
-    ROUTE_LANES: 30
+    ROUTE_LANES: 16
   max_points:
     LANE: 20
     LEFT_BOUNDARY: 20
