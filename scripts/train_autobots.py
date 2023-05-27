@@ -80,7 +80,7 @@ if __name__ == '__main__':
 
             SCENARIO_SELECTION = 1000000,
             MAX_EPOCHS = 20,
-            BATCH_SIZE = 32,
+            BATCH_SIZE = 64,
 
             # SCENARIO_SELECTION = 200000,
             # MAX_EPOCHS = 20,
