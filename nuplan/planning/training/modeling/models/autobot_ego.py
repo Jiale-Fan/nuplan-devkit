@@ -24,6 +24,8 @@ from nuplan.planning.training.preprocessing.feature_builders.agents_feature_buil
 from nuplan.planning.training.preprocessing.features.autobots_feature_conversion import NuplanToAutobotsConverter
 from nuplan.planning.training.modeling.types import FeaturesType, TargetsType
 from nuplan.planning.training.modeling.models.urban_driver_open_loop_model import UrbanDriverOpenLoopModelFeatureParams
+from nuplan.planning.training.preprocessing.features.trajectory import Trajectory
+
 
 from nuplan.planning.training.modeling.models.urban_driver_open_loop_model_utils import (
     pad_avails,
@@ -595,7 +597,26 @@ class AutoBotEgo(TorchModuleWrapper):
         # return  [c, T, B, 5], [B, c]
         # return out_dists, mode_probs
 
-        return {"trajectory": traj, "mode_probs": TensorFeature(data=mode_probs), "pred": TensorFeature(data=out_dists)}
+        multimodal_trajectories = out_dists.permute(2, 0, 1, 3)  # [B, c, T, 5]
+        multimodal_trajectories = multimodal_trajectories[:,:,:,:3]
+        multimodal_trajectories[:,:,-1] = 0 # all angles being zero [TODO]
+
+        return {"trajectory": traj, "mode_probs": TensorFeature(data=mode_probs), "pred": TensorFeature(data=out_dists),
+                "multimodal_trajectories": TensorFeature(data=multimodal_trajectories)}
         # return {"trajectory": traj}
 
 
+# def pack_multimodal_trajectories(out_dists: Tensor) -> List[Trajectory]:
+#     """
+#         out_dists: Tensor [c, T, B, 5]
+#     """
+#     reshaped_out_dists = out_dists.permute(2, 0, 1, 3)  # [B, c, T, 5]
+#     B = reshaped_out_dists.size(0)
+#     multimodal_trajectories = []
+#     for b in range(B):
+#         traj_data = reshaped_out_dists[b, :, :, :3]
+#         traj_data[:,:,-1] = 0 # all angles being zero [TODO]
+#         traj = Trajectory(data=traj_data)
+#         multimodal_trajectories.append(traj)
+
+#     return multimodal_trajectories

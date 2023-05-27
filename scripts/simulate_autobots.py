@@ -45,7 +45,7 @@ def simulate(sim_dict: dict) -> str:
         # Simulation folder for visualization in nuBoard
         simulation_folder = cfg.output_dir
         
-    elif PLANNER == 'ml_planner':
+    elif PLANNER == 'ml_planner' or 'multimodal_ml_planner':
         
         MODEL = sim_dict['MODEL']
         
@@ -57,7 +57,7 @@ def simulate(sim_dict: dict) -> str:
         # last_experiment = sorted(os.listdir(LOG_DIR))[-1]
         # checkpoint = sorted((last_experiment / 'best_model').iterdir())[-1]
         
-        i = -3 # get desired experiment
+        i = -1 # get desired experiment
         train_experiment_dir = sorted(Path(LOG_DIR).iterdir())[i]  
         
         #################################################################################
@@ -88,6 +88,7 @@ def simulate(sim_dict: dict) -> str:
             f'group={SAVE_DIR}',
             f'planner={PLANNER}',
             f'model={MODEL}',
+            '+sequentially=True',
             'planner.ml_planner.model_config=${model}',  # hydra notation to select model config
             f'planner.ml_planner.checkpoint_path={MODEL_PATH}',  # this path can be replaced by the checkpoint of the model trained in the previous section
             f'+simulation={CHALLENGE}',
@@ -133,13 +134,15 @@ if __name__ == '__main__':
             CONFIG_NAME = 'default_simulation',
 
             # Select the planner and simulation challenge
-            PLANNER = 'ml_planner',  # [simple_planner, ml_planner]
-            CHALLENGE = 'open_loop_boxes',  # [open_loop_boxes, closed_loop_nonreactive_agents, closed_loop_reactive_agents]
+            PLANNER = 'ml_planner',  # [simple_planner, ml_planner, multimodal_ml_planner]
+            CHALLENGE = 'closed_loop_reactive_agents',  # [open_loop_boxes, closed_loop_nonreactive_agents, closed_loop_reactive_agents]
             DATASET_PARAMS = [
-                'scenario_builder=nuplan_challenge',  # use nuplan mini database
-                'scenario_filter=nuplan_challenge_scenarios',  # initially select all scenarios in the database
+                'scenario_builder=nuplan',  # use nuplan mini database
+                # 'scenario_filter=nuplan_challenge_scenarios',  # initially select all scenarios in the database
+                # 'scenario_filter=one_of_each_scenario_type',
+                'scenario_filter=one_hand_picked_scenario',
                 'scenario_filter.scenario_types=[starting_left_turn, starting_right_turn, starting_straight_traffic_light_intersection_traversal, stopping_with_lead, high_lateral_acceleration, high_magnitude_speed, low_magnitude_speed, traversing_pickup_dropoff, waiting_for_pedestrian_to_cross, behind_long_vehicle, stationary_in_traffic, near_multiple_vehicles, changing_lane, following_lane_with_lead]',  # select scenario types
-                'scenario_filter.num_scenarios_per_type=10',  # use 10 scenarios per scenario type
+                'scenario_filter.num_scenarios_per_type=1',  # use 10 scenarios per scenario type
             ],
         
             # Name of the experiment
@@ -160,7 +163,7 @@ if __name__ == '__main__':
         simulation_folder = simulate(sim_dict)
         simulation_folders.append(simulation_folder)
         
-    open_nuboard(simulation_folders)
+    # open_nuboard(simulation_folders)
     
 
     """

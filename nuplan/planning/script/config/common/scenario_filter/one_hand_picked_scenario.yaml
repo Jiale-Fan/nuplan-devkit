@@ -6,7 +6,7 @@ scenario_types:                     # List of scenario types to include
 scenario_tokens: null               # List of scenario tokens to include
 
 log_names:                          # Filter scenarios by log names
-  - 2021.07.16.20.45.29_veh-35_01095_01486
+  - 2021.06.07.11.59.52_veh-35_00095_00555
 map_names:                          # Filter scenarios by map names
   - us-nv-las-vegas-strip
 

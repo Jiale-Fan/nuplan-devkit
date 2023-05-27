@@ -1,7 +1,7 @@
 # @package _global_
 job_name: autobots_model
 py_func: train
-objective_aggregate_mode: mean
+objective_aggregate_mode: means
 
 defaults:
 #   - override /data_augmentation:
@@ -9,6 +9,7 @@ defaults:
 #       - agent_dropout_augmentation
   - override /objective:
       - autobots_objective # does this need modification?
+      # - example_metric_objective
   - override /splitter: nuplan
   - override /model: autobots_model
   - override /scenario_filter: nuplan_challenge_scenarios

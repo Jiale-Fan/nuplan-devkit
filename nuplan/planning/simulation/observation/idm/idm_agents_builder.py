@@ -22,7 +22,7 @@ from nuplan.planning.simulation.occupancy_map.strtree_occupancy_map import (
 
 logger = logging.getLogger(__name__)
 
-
+# only use the center attribute of the agent
 def get_starting_segment(
     agent: Agent, map_api: AbstractMap
 ) -> Tuple[Optional[LaneGraphEdgeMapObject], Optional[float]]:

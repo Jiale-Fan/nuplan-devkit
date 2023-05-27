@@ -54,7 +54,7 @@ number_of_gpus_allocated_per_simulation: 0
 # This number specifies number of CPU threads that are used for simulation
 # In case this is null, then each simulation will use unlimited resources.
 # That will typically swamp the host computer, leading to slowdowns and failure.
-number_of_cpus_allocated_per_simulation: 3
+number_of_cpus_allocated_per_simulation: 1
 
 # Set false to disable metric computation
 run_metric: true
