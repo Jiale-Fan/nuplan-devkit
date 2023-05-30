@@ -31,7 +31,7 @@ class MultimodalMLPlanner(AbstractPlanner):
     Used for simulating any ML planner trained through the nuPlan training framework.
     """
 
-    def __init__(self, model: TorchModuleWrapper) -> None:
+    def __init__(self, model: TorchModuleWrapper, metric_cfg_path: str) -> None:
         """
         Initializes the ML planner class.
         :param model: Model to use for inference.
@@ -47,6 +47,9 @@ class MultimodalMLPlanner(AbstractPlanner):
         # Runtime stats for the MLPlannerReport
         self._feature_building_runtimes: List[float] = []
         self._inference_runtimes: List[float] = []
+
+        self._metric_cfg_path = metric_cfg_path
+        self.requires_scenario = True
 
     def _infer_model(self, features: FeaturesType) -> npt.NDArray[np.float32]:
         """
@@ -64,6 +67,8 @@ class MultimodalMLPlanner(AbstractPlanner):
 
         trajectories_object = Trajectory(trajectory_tensor)
 
+        select_best_trajectory(trajectories_object, self._scenario, self._metric_cfg_path)
+
         trajectory = trajectory_tensor.cpu().detach().numpy()[0]  # retrive first (and only) batch as a numpy array
 
         return cast(npt.NDArray[np.float32], trajectory)
@@ -76,6 +81,8 @@ class MultimodalMLPlanner(AbstractPlanner):
         """Inherited, see superclass."""
         self._model_loader.initialize()
         self._initialization = initialization
+        self._scenario = scenario
+        
 
     def name(self) -> str:
         """Inherited, see superclass."""

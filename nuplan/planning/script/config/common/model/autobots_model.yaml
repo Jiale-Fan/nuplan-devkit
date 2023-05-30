@@ -1,6 +1,8 @@
 _target_: nuplan.planning.training.modeling.models.autobot_ego.AutoBotEgo
 _convert_: 'all'
 
+
+
 # Model setup
 d_k: 128 # hidden_size
 _M: 30 # num_other_agents
@@ -81,3 +83,5 @@ feature_params:
   interpolation_method: linear
   disable_map: False
   disable_agents: False
+
+draw_visualizations: True

@@ -28,6 +28,32 @@ class Color(Enum):
     PREDICTED_TRAJECTORY: Tuple[float, float, float] = (158, 63, 120)
     BASELINE_PATHS: Tuple[float, float, float] = (210, 220, 220)
 
+class MultiTrajColor(Enum):
+    COLOR1: Tuple[float, float, float] = (255, 0, 0)
+    COLOR2: Tuple[float, float, float] = (0, 255, 0)
+    COLOR3: Tuple[float, float, float] = (0, 0, 255)
+    COLOR4: Tuple[float, float, float] = (255, 255, 0)
+    COLOR5: Tuple[float, float, float] = (255, 0, 255)
+    COLOR6: Tuple[float, float, float] = (0, 255, 255)
+    COLOR7: Tuple[float, float, float] = (255, 127, 0)
+    COLOR8: Tuple[float, float, float] = (75, 0, 130)
+    COLOR9: Tuple[float, float, float] = (148, 0, 211)
+    COLOR10: Tuple[float, float, float] = (255, 255, 255)
+    
+        # , # Red
+        # (255, 127, 0), # Orange
+        # (255, 255, 0), # Yellow
+        # (0, 255, 0), # Green
+        # (0, 0, 255), # Blue
+        # (75, 0, 130), # Indigo
+        # (148, 0, 211) # Violet
+        # )
+
+    @classmethod
+    def get_color_by_number(cls, number):
+        colors = list(cls.__members__.values())
+        return colors[number]
+
 
 def _draw_trajectory(
     image: npt.NDArray[np.uint8],
@@ -58,7 +84,7 @@ def _draw_trajectory(
     idxs = np.logical_and.reduce([0 <= coords_x, coords_x < grid_width, 0 <= coords_y, coords_y < grid_height])
     coords_x = coords_x[idxs]
     coords_y = coords_y[idxs]
-
+    
     for point in zip(coords_y, coords_x):
         cv2.circle(image, point, radius=radius, color=color.value, thickness=-1)
 
@@ -252,6 +278,53 @@ def get_raster_from_vector_map_with_agents(
         _draw_trajectory(image, target_trajectory, Color.TARGET_TRAJECTORY, pixel_size)
     if predicted_trajectory is not None:
         _draw_trajectory(image, predicted_trajectory, Color.PREDICTED_TRAJECTORY, pixel_size)
+
+    return image
+
+def get_raster_from_vector_map_with_agents_multiple_trajectories(
+    vector_map: Union[VectorMap, VectorSetMap],
+    agents: Union[Agents, GenericAgents],
+    target_trajectory: Optional[Trajectory] = None,
+    predicted_trajectory: Optional[Trajectory] = None,
+    pixel_size: float = 0.5,
+    bit_shift: int = 12,
+    radius: float = 50.0,
+    vehicle_parameters: VehicleParameters = get_pacifica_parameters(),
+) -> npt.NDArray[np.uint8]:
+    """
+    Create rasterized image from vector map and list of agents.
+
+    :param vector_map: Vector map/vector set map feature to visualize.
+    :param agents: Agents/GenericAgents feature to visualize.
+    :param target_trajectory: Target trajectory to visualize.
+    :param predicted_trajectory: Predicted trajectory to visualize.
+    :param pixel_size: [m] Size of a pixel.
+    :param bit_shift: Bit shift when drawing or filling precise polylines/rectangles.
+    :param radius: [m] Radius of raster.
+    :param vehicle_parameters: Parameters of the ego vehicle.
+    :return: Composed rasterized image.
+    """
+    # Raster size
+    size = int(2 * radius / pixel_size)
+
+    # Create map layers
+    map_raster = _create_map_raster(vector_map, radius, size, bit_shift, pixel_size)
+    agents_raster = _create_agents_raster(agents, radius, size, bit_shift, pixel_size)
+    ego_raster = _create_ego_raster(vehicle_parameters, pixel_size, size)
+
+    # Compose and paint image
+    image: npt.NDArray[np.uint8] = np.full((size, size, 3), Color.BACKGROUND.value, dtype=np.uint8)
+    image[map_raster.nonzero()] = Color.BASELINE_PATHS.value
+    image[agents_raster.nonzero()] = Color.AGENTS.value
+    image[ego_raster.nonzero()] = Color.EGO.value
+
+    # Draw predicted and target trajectories
+    if target_trajectory is not None:
+        _draw_trajectory(image, target_trajectory, Color.TARGET_TRAJECTORY, pixel_size)
+    if predicted_trajectory is not None:
+        trajectory_list = predicted_trajectory.unpack()
+        for i, trajectory in enumerate(trajectory_list):
+            _draw_trajectory(image, trajectory, MultiTrajColor.get_color_by_number(i), pixel_size)
 
     return image
 

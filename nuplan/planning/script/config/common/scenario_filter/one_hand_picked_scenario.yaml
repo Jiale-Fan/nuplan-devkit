@@ -1,16 +1,23 @@
 _target_: nuplan.planning.scenario_builder.scenario_filter.ScenarioFilter
 _convert_: 'all'
 
-scenario_types:                     # List of scenario types to include
-  - on_pickup_dropoff
-scenario_tokens: null               # List of scenario tokens to include
+# scenario_types:                     # List of scenario types to include
+  # - on_pickup_dropoff
+scenario_types: null
+# scenario_tokens: null               # List of scenario tokens to include
+scenario_tokens: 
+  - 0375aa2f2a655aeb
 
 log_names:                          # Filter scenarios by log names
-  - 2021.06.07.11.59.52_veh-35_00095_00555
-map_names:                          # Filter scenarios by map names
-  - us-nv-las-vegas-strip
+  # - 2021.06.07.11.59.52_veh-35_00095_00555
+  # - 2021.10.14.14.50.40_veh-28_01444_01589
+  - 2021.10.05.08.44.14_veh-53_00010_00964
+# map_names:                          # Filter scenarios by map names
+  # - us-nv-las-vegas-strip
 
-num_scenarios_per_type: 1           # Number of scenarios per type
+map_names: null
+
+num_scenarios_per_type: null           # Number of scenarios per type
 limit_total_scenarios: null         # Limit total scenarios (float = fraction, int = num) - this filter can be applied on top of num_scenarios_per_type
 timestamp_threshold_s: null         # Filter scenarios to ensure scenarios have more than `timestamp_threshold_s` seconds between their initial lidar timestamps
 ego_displacement_minimum_m: null    # Whether to remove scenarios where the ego moves less than a certain amount

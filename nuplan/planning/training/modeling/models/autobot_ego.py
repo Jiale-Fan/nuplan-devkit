@@ -35,7 +35,10 @@ from nuplan.planning.training.modeling.models.urban_driver_open_loop_model_utils
 from typing import List, Optional, cast, Tuple, Union
 # from context_encoders import MapEncoderCNN, MapEncoderPts
 from nuplan.planning.training.modeling.models.context_encoders import MapEncoderCNN, MapEncoderPts
-
+from nuplan.planning.training.callbacks.utils.visualization_utils import (
+    get_raster_from_vector_map_with_agents, get_raster_from_vector_map_with_agents_multiple_trajectories
+)
+import cv2
 
 def init(module, weight_init, bias_init, gain=1):
     '''
@@ -116,10 +119,15 @@ class AutoBotEgo(TorchModuleWrapper):
         feature_params: UrbanDriverOpenLoopModelFeatureParams,
         d_k=128, _M=5, c=5, T=30, L_enc=1, dropout=0.0, k_attr=2, map_attr=3,
         num_heads=16, L_dec=1, tx_hidden_size=384, use_map_img=False, use_map_lanes=False, 
+        draw_visualizations = False
         ):
+
+        self.draw_visualizations = draw_visualizations
 
         self.converter = NuplanToAutobotsConverter(_M=_M)
         self._feature_params = feature_params
+
+        self.img_num = 0
         
         super().__init__(
             feature_builders=[
@@ -599,10 +607,22 @@ class AutoBotEgo(TorchModuleWrapper):
 
         multimodal_trajectories = out_dists.permute(2, 0, 1, 3)  # [B, c, T, 5]
         multimodal_trajectories = multimodal_trajectories[:,:,:,:3]
-        multimodal_trajectories[:,:,-1] = 0 # all angles being zero [TODO]
+        multimodal_trajectories[:,:,:,-1] = 0 # all angles being zero [TODO]
+
+        multimodal_traj_objects = Trajectory(data=multimodal_trajectories.squeeze(0))
+
+        if self.draw_visualizations:
+
+            image_ndarray = get_raster_from_vector_map_with_agents_multiple_trajectories(vector_set_map_data.to_device('cpu'),
+                                                                    ego_agent_features.to_device('cpu'), 
+                                                                    target_trajectory=None,
+                                                    predicted_trajectory=multimodal_traj_objects.to_device('cpu'), 
+                                                    pixel_size=0.1)
+            cv2.imwrite(f"/data1/nuplan/jiale/exp/autobots_experiment/images/multimodal_vis_{self.img_num:04d}.png", image_ndarray)
+            self.img_num += 1
 
         return {"trajectory": traj, "mode_probs": TensorFeature(data=mode_probs), "pred": TensorFeature(data=out_dists),
-                "multimodal_trajectories": TensorFeature(data=multimodal_trajectories)}
+                "multimodal_trajectories": multimodal_traj_objects}
         # return {"trajectory": traj}
 
 
