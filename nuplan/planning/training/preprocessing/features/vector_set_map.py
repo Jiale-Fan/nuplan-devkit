@@ -213,6 +213,18 @@ class VectorSetMap(AbstractModelFeature):
         if lane_coords.size == 0:
             raise RuntimeError("Lane feature is empty!")
         return lane_coords
+    
+    def get_boundary_coords(self, sample_idx: int) -> FeatureDataType:
+        """
+        Retrieve boundary coordinates at given sample index.
+        :param sample_idx: the batch index of interest.
+        :return: boundary coordinate features.
+        """
+        left_boundary_coords = self.coords[VectorFeatureLayer.LEFT_BOUNDARY.name][sample_idx]
+        right_boundary_coords = self.coords[VectorFeatureLayer.RIGHT_BOUNDARY.name][sample_idx]
+        if left_boundary_coords.size == 0 and right_boundary_coords.size == 0:
+            raise RuntimeError("Boundary feature is empty!")
+        return left_boundary_coords, right_boundary_coords
 
     @classmethod
     def collate(cls, batch: List[VectorSetMap]) -> VectorSetMap:

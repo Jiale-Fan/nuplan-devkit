@@ -2,10 +2,9 @@ _target_: nuplan.planning.training.modeling.models.autobot_ego.AutoBotEgo
 _convert_: 'all'
 
 
-
 # Model setup
 d_k: 128 # hidden_size
-_M: 30 # num_other_agents
+_M: 90 # num_other_agents
 c: 6 # num_modes
 T: 16
 L_enc: 4
@@ -54,7 +53,7 @@ feature_params:
   total_max_points: 20
   feature_dimension: 8
   # Agent features
-  agent_features: [VEHICLE]
+  agent_features: [VEHICLE, BICYCLE, PEDESTRIAN]
   ego_dimension: 3
   agent_dimension: 8
   max_agents: 30
@@ -66,12 +65,12 @@ feature_params:
   # Map features
   map_features: [LANE, LEFT_BOUNDARY, RIGHT_BOUNDARY, STOP_LINE, CROSSWALK, ROUTE_LANES]
   max_elements:
-    LANE: 30
-    LEFT_BOUNDARY: 30
-    RIGHT_BOUNDARY: 30
+    LANE: 120
+    LEFT_BOUNDARY: 120
+    RIGHT_BOUNDARY: 120
     STOP_LINE: 20
     CROSSWALK: 20
-    ROUTE_LANES: 30
+    ROUTE_LANES: 40
   max_points:
     LANE: 20
     LEFT_BOUNDARY: 20
@@ -79,9 +78,9 @@ feature_params:
     STOP_LINE: 20
     CROSSWALK: 20
     ROUTE_LANES: 20
-  vector_set_map_feature_radius: 35    # [m] The query radius scope relative to the current ego-pose.
+  vector_set_map_feature_radius: 200    # [m] The query radius scope relative to the current ego-pose.
   interpolation_method: linear
   disable_map: False
   disable_agents: False
 
-draw_visualizations: True
+draw_visualizations: False

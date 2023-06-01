@@ -13,6 +13,11 @@ from nuplan.planning.training.preprocessing.features.raster import Raster
 from nuplan.planning.training.preprocessing.features.trajectory import Trajectory
 from nuplan.planning.training.preprocessing.features.vector_map import VectorMap
 from nuplan.planning.training.preprocessing.features.vector_set_map import VectorSetMap
+from nuplan.planning.training.preprocessing.features.abstract_model_feature import (
+    AbstractModelFeature,
+    FeatureDataType,
+    to_tensor,
+)
 
 
 class Color(Enum):
@@ -27,6 +32,7 @@ class Color(Enum):
     TARGET_TRAJECTORY: Tuple[float, float, float] = (61, 160, 179)
     PREDICTED_TRAJECTORY: Tuple[float, float, float] = (158, 63, 120)
     BASELINE_PATHS: Tuple[float, float, float] = (210, 220, 220)
+    BOUNDARY: Tuple[float, float, float] = (255, 0, 0)
 
 class MultiTrajColor(Enum):
     COLOR1: Tuple[float, float, float] = (255, 0, 0)
@@ -143,6 +149,97 @@ def _create_map_raster(
         shift=bit_shift,
         lineType=cv2.LINE_AA,
     )
+
+    # Flip grid upside down
+    map_raster = np.flipud(map_raster)
+
+    return map_raster
+
+def _get_shifted_idx(vector_coords: FeatureDataType,
+            radius: float,
+            bit_shift: int,
+            pixel_size: float,
+        ) -> np.ndarray:
+    
+    num_elements, num_points, _ = vector_coords.shape
+    map_ortho_align = Rotation.from_euler('z', 90, degrees=True).as_matrix().astype(np.float32)
+    coords = vector_coords.reshape(num_elements * num_points, 2)
+    coords = np.concatenate((coords, np.zeros_like(coords[:, 0:1])), axis=-1)
+    coords = (map_ortho_align @ coords.T).T
+    coords = coords[:, :2].reshape(num_elements, num_points, 2)
+    coords[..., 0] = np.clip(coords[..., 0], -radius, radius)
+    coords[..., 1] = np.clip(coords[..., 1], -radius, radius)
+
+    # Convert coordinates to grid indices
+    index_coords = (radius + coords) / pixel_size
+    shifted_index_coords = (index_coords * 2**bit_shift).astype(np.int64)
+
+    return shifted_index_coords
+
+def _create_map_raster_with_boundary(
+    vector_map: VectorSetMap,
+    radius: float,
+    size: int,
+    bit_shift: int,
+    pixel_size: float,
+    color: int = 1,
+    thickness: int = 2,
+) -> npt.NDArray[np.uint8]:
+    """
+    Create vector map raster layer to be visualized.
+
+    :param vector_map: Vector map feature object.
+    :param radius: [m] Radius of grid.
+    :param bit_shift: Bit shift when drawing or filling precise polylines/rectangles.
+    :param pixel_size: [m] Size of each pixel.
+    :param size: [pixels] Size of grid.
+    :param color: Grid color.
+    :param thickness: Map lane/baseline thickness.
+    :return: Instantiated grid.
+    """
+    # Extract coordinates from vector map feature
+    vector_coords = vector_map.get_lane_coords(0)  # Get first sample in batch'
+    left_boundary, right_boundary = vector_map.get_boundary_coords(0)
+
+    # Instantiate grid
+    map_raster: npt.NDArray[np.uint8] = np.zeros((size, size), dtype=np.uint8)
+
+    shifted_index_coords = _get_shifted_idx(vector_coords, radius, bit_shift, pixel_size)
+    shifted_left_boundary = _get_shifted_idx(left_boundary, radius, bit_shift, pixel_size)
+    shifted_right_boundary = _get_shifted_idx(right_boundary, radius, bit_shift, pixel_size)
+
+
+    # Paint the grid
+    cv2.polylines(
+        map_raster,
+        shifted_index_coords,
+        isClosed=False,
+        color=100,
+        thickness=thickness,
+        shift=bit_shift,
+        lineType=cv2.LINE_AA,
+    )
+
+    cv2.polylines(
+        map_raster,
+        shifted_left_boundary,
+        isClosed=False,
+        color=30,
+        thickness=thickness,
+        shift=bit_shift,
+        lineType=cv2.LINE_AA,
+    )
+
+    cv2.polylines(
+        map_raster,
+        shifted_right_boundary,
+        isClosed=False,
+        color=30,
+        thickness=thickness,
+        shift=bit_shift,
+        lineType=cv2.LINE_AA,
+    )
+
 
     # Flip grid upside down
     map_raster = np.flipud(map_raster)
@@ -308,13 +405,15 @@ def get_raster_from_vector_map_with_agents_multiple_trajectories(
     size = int(2 * radius / pixel_size)
 
     # Create map layers
-    map_raster = _create_map_raster(vector_map, radius, size, bit_shift, pixel_size)
+    map_raster = _create_map_raster_with_boundary(vector_map, radius, size, bit_shift, pixel_size)
     agents_raster = _create_agents_raster(agents, radius, size, bit_shift, pixel_size)
     ego_raster = _create_ego_raster(vehicle_parameters, pixel_size, size)
 
     # Compose and paint image
     image: npt.NDArray[np.uint8] = np.full((size, size, 3), Color.BACKGROUND.value, dtype=np.uint8)
-    image[map_raster.nonzero()] = Color.BASELINE_PATHS.value
+    image[np.where(map_raster>50)] = Color.BASELINE_PATHS.value
+
+    image[np.where((map_raster > 1) & (map_raster < 50))] = Color.BOUNDARY.value
     image[agents_raster.nonzero()] = Color.AGENTS.value
     image[ego_raster.nonzero()] = Color.EGO.value
 

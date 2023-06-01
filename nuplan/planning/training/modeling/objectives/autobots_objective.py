@@ -16,7 +16,7 @@ class AutobotsObjective(AbstractObjective):
     Autobots ego objective
     """
 
-    def __init__(self, scenario_type_loss_weighting: Dict[str, float], entropy_weight, kl_weight, use_FDEADE_aux_loss):
+    def __init__(self, scenario_type_loss_weighting: Dict[str, float], entropy_weight, kl_weight, use_FDEADE_aux_loss, lamda_e = 3):
         """
         Initializes the class
 
@@ -28,6 +28,7 @@ class AutobotsObjective(AbstractObjective):
         self.kl_weight=kl_weight
         self.use_FDEADE_aux_loss=use_FDEADE_aux_loss
         self._scenario_type_loss_weighting = scenario_type_loss_weighting
+        self.lamda_e = lamda_e
 
     def name(self) -> str:
         """
@@ -64,7 +65,7 @@ class AutobotsObjective(AbstractObjective):
                                                                                    kl_weight=self.kl_weight,
                                                                                    use_FDEADE_aux_loss=self.use_FDEADE_aux_loss)
 
-        total_loss=nll_loss + adefde_loss + kl_loss # scalar
+        total_loss=nll_loss + adefde_loss + kl_loss + self.lamda_e*post_entropy# scalar
         # how to implement the gradient clip?
 
         # nll_loss: 

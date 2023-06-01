@@ -57,7 +57,7 @@ class PositionalEncoding(nn.Module):
     '''
     Standard positional encoding.
     '''
-    def __init__(self, d_model, dropout=0.1, max_len=100):
+    def __init__(self, d_model, dropout=0.1, max_len=1000):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
         pe = torch.zeros(max_len, d_model)
@@ -292,6 +292,8 @@ class AutoBotEgo(TorchModuleWrapper):
         T_obs = agents_emb.size(0)
         B = agent_masks.size(0)
         agents_emb = agents_emb.permute(2, 1, 0, 3).reshape(self._M + 1, B * T_obs, -1)
+        # [TODO]
+        # agents_soc_emb = layer(self.pos_encoder(agents_emb), src_key_padding_mask=agent_masks.view(-1, self._M+1))
         agents_soc_emb = layer(agents_emb, src_key_padding_mask=agent_masks.view(-1, self._M+1))
         agents_soc_emb = agents_soc_emb.view(self._M+1, B, T_obs, -1).permute(2, 1, 0, 3)
         return agents_soc_emb
@@ -605,18 +607,20 @@ class AutoBotEgo(TorchModuleWrapper):
         # return  [c, T, B, 5], [B, c]
         # return out_dists, mode_probs
 
-        multimodal_trajectories = out_dists.permute(2, 0, 1, 3)  # [B, c, T, 5]
+        multimodal_trajectories = out_dists.clone()
+        multimodal_trajectories = multimodal_trajectories.permute(2, 0, 1, 3)  # [B, c, T, 5]
         multimodal_trajectories = multimodal_trajectories[:,:,:,:3]
         multimodal_trajectories[:,:,:,-1] = 0 # all angles being zero [TODO]
 
-        multimodal_traj_objects = Trajectory(data=multimodal_trajectories.squeeze(0))
+        multimodal_traj_objects = TensorFeature(data=multimodal_trajectories)
+        
 
         if self.draw_visualizations:
-
+            multimodal_traj_draw = Trajectory(data=multimodal_trajectories.squeeze(0))
             image_ndarray = get_raster_from_vector_map_with_agents_multiple_trajectories(vector_set_map_data.to_device('cpu'),
                                                                     ego_agent_features.to_device('cpu'), 
                                                                     target_trajectory=None,
-                                                    predicted_trajectory=multimodal_traj_objects.to_device('cpu'), 
+                                                    predicted_trajectory=multimodal_traj_draw.to_device('cpu'), 
                                                     pixel_size=0.1)
             cv2.imwrite(f"/data1/nuplan/jiale/exp/autobots_experiment/images/multimodal_vis_{self.img_num:04d}.png", image_ndarray)
             self.img_num += 1
