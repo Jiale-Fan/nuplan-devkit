@@ -99,12 +99,6 @@ if __name__ == '__main__':
         warnings.filterwarnings("ignore", category=RuntimeWarning)
         train_autobots(train_dict)
         ray.shutdown()
-    """
-    
-    TODO: cut modes number to 6
-    TODO: increase encoder/decoder layer number
-    """
-    
     
     """
 

@@ -135,7 +135,7 @@ class OutputModel(nn.Module):
         # return torch.stack([x_mean, y_mean, x_sigma, y_sigma, rho], dim=2)
 
         # theta_mean = torch.clip(pred_obs[:,:,4], min=-np.pi, max=np.pi)
-        theta_mean = F.tanh(pred_obs[:,:,4])*np.pi
+        theta_mean = torch.tanh(pred_obs[:,:,4])*np.pi
         theta_sigma = F.softplus(pred_obs[:, :, 5]) + self.min_stdev
 
         return torch.stack([x_mean, y_mean, x_sigma, y_sigma, theta_mean, theta_sigma], dim=2)
@@ -383,13 +383,20 @@ class AutoBotEgo(TorchModuleWrapper):
             sample_avails = [sample_ego_avails]
 
             # Agent features
-            for feature_name in self._feature_params.agent_features:
+            agent_types_num = len(self._feature_params.agent_features)
+            for i, feature_name in enumerate(self._feature_params.agent_features):
                 # if there exist at least one valid agent in the sample
                 if ego_agent_features.has_agents(feature_name, sample_idx):
                     # num_frames x num_agents x num_features -> num_agents x num_frames x num_features
                     sample_agent_features = torch.permute(
                         ego_agent_features.agents[feature_name][sample_idx], (1, 0, 2)
                     )
+
+                    # concat agent type one-hot encoding to agent features
+                    one_hot_encodings = torch.zeros((sample_agent_features.shape[0], sample_agent_features.shape[1], agent_types_num), device=sample_agent_features.device)
+                    one_hot_encodings[:, :, i] = 1
+                    sample_agent_features = torch.cat((sample_agent_features, one_hot_encodings), dim=-1)
+
                     # maintain fixed feature size through trimming/padding
                     sample_agent_features = sample_agent_features[
                         ..., : min(self._feature_params.agent_dimension, self._feature_params.feature_dimension)
@@ -561,7 +568,7 @@ class AutoBotEgo(TorchModuleWrapper):
         # ego_in= self.converter.AgentsToAutobotsEgoinTensor(agents)
 
         roads = torch.cat((map_in, map_avails.unsqueeze(-1)), dim=3) # [8, 160, 20, 9]
-        agents_in_and_ego = torch.cat((agent_features[:,:,:,:3], agent_avails.unsqueeze(-1)), dim=3).transpose(1, 2)  # agent features' feature dimension from 3 to 8 are padded with 0s.
+        agents_in_and_ego = torch.cat((agent_features, agent_avails.unsqueeze(-1)), dim=3).transpose(1, 2)  # agent features' feature dimension from 3 to 8 are padded with 0s.
         ego_in = agents_in_and_ego[:, :, 0, :] # [8, 20, 9]
         agents_in = agents_in_and_ego[:, :, 1:, :] # [8, 20, 30, 9]
         
