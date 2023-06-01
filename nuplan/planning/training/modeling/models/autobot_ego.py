@@ -78,6 +78,34 @@ class PositionalEncoding(nn.Module):
         return self.dropout(x)
 
 
+# class OutputModel(nn.Module):
+#     '''
+#     This class operates on the output of AutoBot-Ego's decoder representation. It produces the parameters of a
+#     bivariate Gaussian distribution.
+#     '''
+#     def __init__(self, d_k=64):
+#         super(OutputModel, self).__init__()
+#         self.d_k = d_k
+#         init_ = lambda m: init(m, nn.init.xavier_normal_, lambda x: nn.init.constant_(x, 0), np.sqrt(2))
+#         self.observation_model = nn.Sequential(
+#             init_(nn.Linear(d_k, d_k)), nn.ReLU(),
+#             init_(nn.Linear(d_k, d_k)), nn.ReLU(),
+#             init_(nn.Linear(d_k, 5))
+#         )
+#         self.min_stdev = 0.01
+
+#     def forward(self, agent_decoder_state):
+#         T = agent_decoder_state.shape[0]
+#         BK = agent_decoder_state.shape[1]
+#         pred_obs = self.observation_model(agent_decoder_state.reshape(-1, self.d_k)).reshape(T, BK, -1)
+
+#         x_mean = pred_obs[:, :, 0]
+#         y_mean = pred_obs[:, :, 1]
+#         x_sigma = F.softplus(pred_obs[:, :, 2]) + self.min_stdev
+#         y_sigma = F.softplus(pred_obs[:, :, 3]) + self.min_stdev
+#         rho = torch.tanh(pred_obs[:, :, 4]) * 0.9  # for stability
+#         return torch.stack([x_mean, y_mean, x_sigma, y_sigma, rho], dim=2)
+
 class OutputModel(nn.Module):
     '''
     This class operates on the output of AutoBot-Ego's decoder representation. It produces the parameters of a
@@ -90,7 +118,7 @@ class OutputModel(nn.Module):
         self.observation_model = nn.Sequential(
             init_(nn.Linear(d_k, d_k)), nn.ReLU(),
             init_(nn.Linear(d_k, d_k)), nn.ReLU(),
-            init_(nn.Linear(d_k, 5))
+            init_(nn.Linear(d_k, 6)) # added angle distribution
         )
         self.min_stdev = 0.01
 
@@ -103,8 +131,14 @@ class OutputModel(nn.Module):
         y_mean = pred_obs[:, :, 1]
         x_sigma = F.softplus(pred_obs[:, :, 2]) + self.min_stdev
         y_sigma = F.softplus(pred_obs[:, :, 3]) + self.min_stdev
-        rho = torch.tanh(pred_obs[:, :, 4]) * 0.9  # for stability
-        return torch.stack([x_mean, y_mean, x_sigma, y_sigma, rho], dim=2)
+        # rho = torch.tanh(pred_obs[:, :, 4]) * 0.9  # for stability
+        # return torch.stack([x_mean, y_mean, x_sigma, y_sigma, rho], dim=2)
+
+        # theta_mean = torch.clip(pred_obs[:,:,4], min=-np.pi, max=np.pi)
+        theta_mean = F.tanh(pred_obs[:,:,4])*np.pi
+        theta_sigma = F.softplus(pred_obs[:, :, 5]) + self.min_stdev
+
+        return torch.stack([x_mean, y_mean, x_sigma, y_sigma, theta_mean, theta_sigma], dim=2)
 
 
 class AutoBotEgo(TorchModuleWrapper):

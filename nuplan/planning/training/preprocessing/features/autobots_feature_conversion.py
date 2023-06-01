@@ -266,7 +266,7 @@ class NuplanToAutobotsConverter:
         """take the trajectory with maximum probability
 
         Args:
-            pred_obs: shape [c, T, B, 5] c trajectories for the ego agents with every point being the params of
+            pred_obs: shape [c, T, B, 6] c trajectories for the ego agents with every point being the params of
                                             Bivariate Gaussian distribution.
             mode_probs: shape [B, c] mode probability predictions P(z|X_{1:T_obs})
         """
@@ -276,8 +276,7 @@ class NuplanToAutobotsConverter:
         trajs=torch.stack([pred_obs[most_likely_idx[i],:,i,:] for i in range(pred_obs.shape[2])])
 
         trajs_3=trajs[:,:,:3]
-
-        trajs_3[:,:,-1] = 0
+        trajs_3[:,:,-1] = trajs[:,:,-2]
         
         # ang_vec=trajs_3[:,1:,:2] - trajs_3[:,:-1,:2] 
         # ang = torch.atan2(ang_vec[:,:,0], ang_vec[:,:,1])
