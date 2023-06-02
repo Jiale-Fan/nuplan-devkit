@@ -57,7 +57,7 @@ def simulate(sim_dict: dict) -> str:
         # last_experiment = sorted(os.listdir(LOG_DIR))[-1]
         # checkpoint = sorted((last_experiment / 'best_model').iterdir())[-1]
         
-        i = -3 # get desired experiment
+        i = -1 # get desired experiment
         train_experiment_dir = sorted(Path(LOG_DIR).iterdir())[i]  
         
         #################################################################################

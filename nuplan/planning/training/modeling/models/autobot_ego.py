@@ -648,14 +648,8 @@ class AutoBotEgo(TorchModuleWrapper):
         # return  [c, T, B, 5], [B, c]
         # return out_dists, mode_probs
 
-        multimodal_trajectories = out_dists.clone()
-        multimodal_trajectories = multimodal_trajectories.permute(2, 0, 1, 3)  # [B, c, T, 5]
-        multimodal_trajectories = multimodal_trajectories[:,:,:,:3]
-        multimodal_trajectories[:,:,:,-1] = 0 # all angles being zero [TODO]
-
-        multimodal_traj_objects = TensorFeature(data=multimodal_trajectories)
+        multimodal_trajectories = self.converter.output_distribution_to_multimodal_trajectories(out_dists)
         
-
         if self.draw_visualizations:
             multimodal_traj_draw = Trajectory(data=multimodal_trajectories.squeeze(0))
             image_ndarray = get_raster_from_vector_map_with_agents_multiple_trajectories(vector_set_map_data.to_device('cpu'),
@@ -667,7 +661,7 @@ class AutoBotEgo(TorchModuleWrapper):
             self.img_num += 1
 
         return {"trajectory": traj, "mode_probs": TensorFeature(data=mode_probs), "pred": TensorFeature(data=out_dists),
-                "multimodal_trajectories": multimodal_traj_objects}
+                "multimodal_trajectories": TensorFeature(data=multimodal_trajectories)}
         # return {"trajectory": traj}
 
 

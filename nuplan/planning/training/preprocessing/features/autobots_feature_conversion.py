@@ -284,3 +284,19 @@ class NuplanToAutobotsConverter:
         trajs_3[:,-1,2] = trajs_3[:,-2,2]
 
         return Trajectory(data=trajs_3)
+    
+
+    @torch.jit.unused
+    def output_distribution_to_multimodal_trajectories(self, out_dists: Tensor) -> Tensor:
+
+        multimodal_trajectories = out_dists.clone()
+        multimodal_trajectories = multimodal_trajectories.permute(2, 0, 1, 3)  # [B, c, T, 5]
+        multimodal_trajectories = multimodal_trajectories[:,:,:,:3]
+        
+        ang_vec=multimodal_trajectories[:,:,1:,:2] - multimodal_trajectories[:,:,:-1,:2]  # [B, c, T-1, 2]
+        ang = torch.atan2(ang_vec[..., 0], ang_vec[..., 1]) # [B, c, T-1]
+        multimodal_trajectories[..., :-1, 2] = ang
+        multimodal_trajectories[:,:,-1,2] = multimodal_trajectories[:,:,-2,2]
+
+        return multimodal_trajectories
+        

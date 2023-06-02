@@ -2,6 +2,8 @@ ml_planner:
   _target_: nuplan.planning.simulation.planner.ml_planner.multimodal_ml_planner.MultimodalMLPlanner
   _convert_: 'all'
 
+  metrics: trajectory_selection_metrics
+
   model_config: ???  # Dictionary key from existing planner model config (e.g. raster_model)
   checkpoint_path: ???  # Path to trained model checkpoint
   thread_safe: true

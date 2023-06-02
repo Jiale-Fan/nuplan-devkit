@@ -1,5 +1,5 @@
 import time
-from typing import List, Optional, Type, cast
+from typing import List, Optional, Type, cast, Dict
 
 import numpy as np
 import numpy.typing as npt
@@ -26,19 +26,19 @@ from torch import Tensor
 from unittest.mock import Mock, patch
 from nuplan.planning.scenario_builder.nuplan_db.nuplan_scenario import NuPlanScenario
 
-from nuplan.planning.script.builders.metric_builder import build_metrics_engines_planner
+from nuplan.planning.script.builders.metric_builder import build_metrics_engines_planner, PLANNER_METRICS_CONFIG
 from omegaconf import DictConfig, OmegaConf
 from nuplan.common.actor_state.ego_state import EgoState
 
 from nuplan.planning.simulation.callback.metric_callback import run_metric_engine_planner
-
+from nuplan.planning.simulation.history.simulation_history_buffer import SimulationHistoryBuffer
 class MultimodalMLPlanner(AbstractPlanner):
     """
     Implements abstract planner interface.
     Used for simulating any ML planner trained through the nuPlan training framework.
     """
 
-    def __init__(self, model: TorchModuleWrapper) -> None:
+    def __init__(self, model: TorchModuleWrapper, **args) -> None:
         """
         Initializes the ML planner class.
         :param model: Model to use for inference.
@@ -55,28 +55,13 @@ class MultimodalMLPlanner(AbstractPlanner):
         self._feature_building_runtimes: List[float] = []
         self._inference_runtimes: List[float] = []
 
-        yaml_str = """
-
-                    low_level: # Low level metrics
-                        - ego_lane_change_statistics
-                        - ego_jerk_statistics
-                        - ego_lat_acceleration_statistics
-                        - ego_lon_acceleration_statistics
-                        - ego_lon_jerk_statistics
-                        - ego_yaw_acceleration_statistics
-                        - ego_yaw_rate_statistics
-                        
-                    high_level:  # High level metrics that depend on low level metrics, they can also rely on the previously called high level metrics
-                        - drivable_area_compliance_statistics
-                        - speed_limit_compliance_statistics
-                        - ego_is_comfortable_statistics
-                        - driving_direction_compliance_statistics
-                """
-
         # Parse the YAML string into a DictConfig object
-        self.metric_config = OmegaConf.create(yaml_str)
+        self.metric_config = OmegaConf.create(PLANNER_METRICS_CONFIG)
+        self._metric_weights = {'drivable_area_compliance': 1,
+                                  'ego_is_comfortable': 0.1, 'driving_direction_compliance': 0.8}
+        
 
-    def _infer_model(self, features: FeaturesType, current_ego_state: EgoState) -> npt.NDArray[np.float32]:
+    def _infer_model(self, features: FeaturesType) -> npt.NDArray[np.float32]:
         """
         Makes a single inference on a Pytorch/Torchscript model.
 
@@ -88,17 +73,33 @@ class MultimodalMLPlanner(AbstractPlanner):
 
         # Extract trajectory prediction
         trajectory_predicted = cast(TensorFeature, predictions['multimodal_trajectories'])
-        trajectories_tensor = trajectory_predicted.data
+        trajectories_tensor = trajectory_predicted.data.cpu().detach().numpy()
 
-        trajectories_object = Trajectory(trajectories_tensor)
+        return trajectories_tensor
 
-        selected_trajectory = self._select_best_trajectory(trajectories_object, current_ego_state)
+    # def _infer_model(self, features: FeaturesType) -> npt.NDArray[np.float32]:
+    #     """
+    #     Makes a single inference on a Pytorch/Torchscript model.
 
-        trajectory = selected_trajectory.data.cpu().detach().numpy()[0]  # retrive first (and only) batch as a numpy array
+    #     :param features: dictionary of feature types
+    #     :return: predicted trajectory poses as a numpy array
+    #     """
+    #     # Propagate model
+    #     predictions = self._model_loader.infer(features)
 
-        return cast(npt.NDArray[np.float32], trajectory)
+    #     # Extract trajectory prediction
+    #     trajectory_predicted = cast(TensorFeature, predictions['multimodal_trajectories'])
+    #     trajectories_tensor = trajectory_predicted.data
 
-    def _select_best_trajectory(self, trajectories: Trajectory, current_ego_state: EgoState) -> Trajectory:
+    #     trajectories_object = Trajectory(trajectories_tensor)
+
+    #     selected_trajectory = self._select_best_trajectory(trajectories_object, current_ego_state)
+
+    #     trajectory = selected_trajectory.data.cpu().detach().numpy()[0]  # retrive first (and only) batch as a numpy array
+
+    #     return cast(npt.NDArray[np.float32], trajectory)
+
+    def _select_best_trajectory(self, trajectories: Trajectory, history: SimulationHistoryBuffer) -> npt.NDArray[np.float32]:
         """
         Selects the best trajectory from a set of trajectories.
         
@@ -109,19 +110,44 @@ class MultimodalMLPlanner(AbstractPlanner):
         # [TODO] mock a scenario, pack map_api into it. 
         mock_scenario = Mock(spec=NuPlanScenario)
         mock_scenario.map_api = self._initialization.map_api
-        mock_scenario.initial_ego_state = current_ego_state
-        
+        mock_scenario.initial_ego_state = history.ego_states[0]
+        mock_scenario.scenario_type = "unknown"
+        mock_scenario.scenario_name = "unknown"
+
         metrics_list = []
 
         traj_list = trajectories.unpack()
         for trajectory in traj_list:
-            simulation_history = get_simulation_history(trajectory, mock_scenario)
+            ego_states_list = transform_predictions_to_states(trajectory.data[0], history.ego_states, self._future_horizon, self._step_interval)
+            mock_simulation_history = Mock(spec=SimulationHistory)
+            mock_simulation_history.extract_ego_state = ego_states_list
+            mock_simulation_history.map_api = self._initialization.map_api
+            
             metric_engine = build_metrics_engines_planner(self.metric_config, mock_scenario)
-            metrics_list.append(run_metric_engine_planner(metric_engine, mock_scenario, "autobot", simulation_history))
+            metrics_list.append(run_metric_engine_planner(metric_engine, mock_scenario, "autobot", mock_simulation_history))
 
+        score_list = self._extract_metric_scores(metrics_list)
+        best_traj_idx = np.argmax(score_list)
         # [TODO] select the best trajectory based on the metrics
-        return trajectories[0]
+        selected_traj = traj_list[best_traj_idx].data[0]
+        return selected_traj
     
+
+    def _extract_metric_scores(self, metrics_list: List[Dict[str, float]]) -> Dict[str, float]:
+        score_list = []
+        for i, metric_for_one_traj in enumerate(metrics_list):
+            metric_dict = {metric_term.key.metric_name: \
+                           metric_term.metric_statistics for metric_term in metric_for_one_traj['unknown_unknown_autobot']}
+            considered_scores = []
+            considered_score_weights = []
+            for metric_key in self._metric_weights.keys():
+                considered_scores.append(metric_dict[metric_key][0].metric_score)
+                considered_score_weights.append(self._metric_weights[metric_key])
+            score_list.append(np.dot(considered_scores, considered_score_weights))
+
+        return score_list
+            
+
     def initialize(self, initialization: PlannerInitialization) -> None:
         """Inherited, see superclass."""
         self._model_loader.initialize()
@@ -152,12 +178,17 @@ class MultimodalMLPlanner(AbstractPlanner):
 
         # Infer model
         start_time = time.perf_counter()
-        predictions = self._infer_model(features, ego_state=history.ego_states[-1])
+
+        trajectories_tensor = self._infer_model(features)
+
+        trajectories_object = Trajectory(trajectories_tensor[0])
+        selected_trajectory = self._select_best_trajectory(trajectories_object, history)
+
         self._inference_runtimes.append(time.perf_counter() - start_time)
 
         # Convert relative poses to absolute states and wrap in a trajectory object.
         states = transform_predictions_to_states(
-            predictions, history.ego_states, self._future_horizon, self._step_interval
+            selected_trajectory, history.ego_states, self._future_horizon, self._step_interval
         )
         trajectory = InterpolatedTrajectory(states)
 

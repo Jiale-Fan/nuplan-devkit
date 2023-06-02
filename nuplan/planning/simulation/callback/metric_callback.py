@@ -42,9 +42,9 @@ def run_metric_engine_planner(
     logger.debug("Starting metrics computation...")
     metric_files = metric_engine.compute(history, scenario=scenario, planner_name=planner_name)
     logger.debug("Finished metrics computation!")
-    logger.debug("Saving metric statistics!")
-    metric_engine.write_to_files(metric_files)
-    logger.debug("Saved metrics!")
+    # logger.debug("Saving metric statistics!")
+    # metric_engine.write_to_files(metric_files)
+    # logger.debug("Saved metrics!")
     return metric_files
 
 
