@@ -57,7 +57,7 @@ def simulate(sim_dict: dict) -> str:
         # last_experiment = sorted(os.listdir(LOG_DIR))[-1]
         # checkpoint = sorted((last_experiment / 'best_model').iterdir())[-1]
         
-        i = -1 # get desired experiment
+        i = -3 # get desired experiment
         train_experiment_dir = sorted(Path(LOG_DIR).iterdir())[i]  
         
         #################################################################################
@@ -135,7 +135,7 @@ if __name__ == '__main__':
             CONFIG_NAME = 'default_simulation',
 
             # Select the planner and simulation challenge
-            PLANNER = 'ml_planner',  # [simple_planner, ml_planner, multimodal_ml_planner]
+            PLANNER = 'multimodal_ml_planner',  # [simple_planner, ml_planner, multimodal_ml_planner]
             CHALLENGE = 'open_loop_boxes',  # [open_loop_boxes, closed_loop_nonreactive_agents, closed_loop_reactive_agents]
             DATASET_PARAMS = [
                 'scenario_builder=nuplan_challenge',  # nuplan, nuplan_challenge, nuplan_mini

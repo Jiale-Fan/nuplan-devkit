@@ -9,6 +9,7 @@ from nuplan.planning.metrics.abstract_metric import AbstractMetricBuilder
 from nuplan.planning.metrics.metric_engine import MetricsEngine
 from nuplan.planning.scenario_builder.abstract_scenario import AbstractScenario
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -94,3 +95,45 @@ def build_metrics_engines(cfg: DictConfig, scenarios: List[AbstractScenario]) ->
         metric_engines[scenario_type] = metric_engine
 
     return metric_engines
+
+
+def build_metrics_engines_planner(metric_config: DictConfig, scenario: AbstractScenario) -> MetricsEngine:
+    """
+    Build a metric engine for each different scenario type.
+    :param cfg: Config.
+    :param scenario: current mocked scenario.
+    :return Dict of scenario types to metric engines.
+    """
+    main_save_path = pathlib.Path("./cache/planner_metric_cache")
+
+    low_level_metrics: DictConfig = metric_config.get('low_level', {})
+    high_level_metrics: DictConfig = metric_config.get('high_level', {})
+
+    # Metrics
+    metric_engine = MetricsEngine(main_save_path=main_save_path, timestamp=0)
+
+    # TODO: Add scope checks
+    scenario_type = scenario.scenario_type
+    scenario_metrics: DictConfig = metric_config.get(scenario_type, {})
+    metrics_in_scope = low_level_metrics.copy()
+    metrics_in_scope.update(scenario_metrics)
+
+    high_level_metric_in_scope = high_level_metrics.copy()
+    # We either pick the selected metrics if any is specified, or all metrics
+
+    base_metrics = {
+        metric_name: instantiate(metric_config) for metric_name, metric_config in metrics_in_scope.items()
+    }
+
+    for metric in base_metrics.values():
+        metric_engine.add_metric(metric)
+
+    # Add high level metrics
+    for metric_name, metric in high_level_metric_in_scope.items():
+        high_level_metric = build_high_level_metric(cfg=metric, base_metrics=base_metrics)
+        metric_engine.add_metric(high_level_metric)
+
+        # Add the high-level metric to the base metrics, so that other high-level metrics can reuse it
+        base_metrics[metric_name] = high_level_metric
+
+    return metric_engine

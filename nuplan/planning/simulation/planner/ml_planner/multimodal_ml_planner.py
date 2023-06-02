@@ -23,7 +23,14 @@ from nuplan.planning.training.preprocessing.features.tensor_target import Tensor
 
 from nuplan.planning.training.modeling.objectives.trajectory_metric_eval_utils import *
 from torch import Tensor
+from unittest.mock import Mock, patch
+from nuplan.planning.scenario_builder.nuplan_db.nuplan_scenario import NuPlanScenario
 
+from nuplan.planning.script.builders.metric_builder import build_metrics_engines_planner
+from omegaconf import DictConfig, OmegaConf
+from nuplan.common.actor_state.ego_state import EgoState
+
+from nuplan.planning.simulation.callback.metric_callback import run_metric_engine_planner
 
 class MultimodalMLPlanner(AbstractPlanner):
     """
@@ -31,7 +38,7 @@ class MultimodalMLPlanner(AbstractPlanner):
     Used for simulating any ML planner trained through the nuPlan training framework.
     """
 
-    def __init__(self, model: TorchModuleWrapper, metric_cfg_path: str) -> None:
+    def __init__(self, model: TorchModuleWrapper) -> None:
         """
         Initializes the ML planner class.
         :param model: Model to use for inference.
@@ -48,10 +55,28 @@ class MultimodalMLPlanner(AbstractPlanner):
         self._feature_building_runtimes: List[float] = []
         self._inference_runtimes: List[float] = []
 
-        self._metric_cfg_path = metric_cfg_path
-        self.requires_scenario = True
+        yaml_str = """
 
-    def _infer_model(self, features: FeaturesType) -> npt.NDArray[np.float32]:
+                    low_level: # Low level metrics
+                        - ego_lane_change_statistics
+                        - ego_jerk_statistics
+                        - ego_lat_acceleration_statistics
+                        - ego_lon_acceleration_statistics
+                        - ego_lon_jerk_statistics
+                        - ego_yaw_acceleration_statistics
+                        - ego_yaw_rate_statistics
+                        
+                    high_level:  # High level metrics that depend on low level metrics, they can also rely on the previously called high level metrics
+                        - drivable_area_compliance_statistics
+                        - speed_limit_compliance_statistics
+                        - ego_is_comfortable_statistics
+                        - driving_direction_compliance_statistics
+                """
+
+        # Parse the YAML string into a DictConfig object
+        self.metric_config = OmegaConf.create(yaml_str)
+
+    def _infer_model(self, features: FeaturesType, current_ego_state: EgoState) -> npt.NDArray[np.float32]:
         """
         Makes a single inference on a Pytorch/Torchscript model.
 
@@ -63,25 +88,45 @@ class MultimodalMLPlanner(AbstractPlanner):
 
         # Extract trajectory prediction
         trajectory_predicted = cast(TensorFeature, predictions['multimodal_trajectories'])
-        trajectory_tensor = trajectory_predicted.data
+        trajectories_tensor = trajectory_predicted.data
 
-        trajectories_object = Trajectory(trajectory_tensor)
+        trajectories_object = Trajectory(trajectories_tensor)
 
-        select_best_trajectory(trajectories_object, self._scenario, self._metric_cfg_path)
+        selected_trajectory = self._select_best_trajectory(trajectories_object, current_ego_state)
 
-        trajectory = trajectory_tensor.cpu().detach().numpy()[0]  # retrive first (and only) batch as a numpy array
+        trajectory = selected_trajectory.data.cpu().detach().numpy()[0]  # retrive first (and only) batch as a numpy array
 
         return cast(npt.NDArray[np.float32], trajectory)
 
-    def _select_best_trajectory(self, trajectories: Trajectory) -> Tensor:
-        pass
-    # [TODO]
+    def _select_best_trajectory(self, trajectories: Trajectory, current_ego_state: EgoState) -> Trajectory:
+        """
+        Selects the best trajectory from a set of trajectories.
+        
+        param: trajectories: a Trajectory object containing a batch of trajectories
+        param: current_ego_state: the current ego state
+        return: the best trajectory
+        """
+        # [TODO] mock a scenario, pack map_api into it. 
+        mock_scenario = Mock(spec=NuPlanScenario)
+        mock_scenario.map_api = self._initialization.map_api
+        mock_scenario.initial_ego_state = current_ego_state
+        
+        metrics_list = []
+
+        traj_list = trajectories.unpack()
+        for trajectory in traj_list:
+            simulation_history = get_simulation_history(trajectory, mock_scenario)
+            metric_engine = build_metrics_engines_planner(self.metric_config, mock_scenario)
+            metrics_list.append(run_metric_engine_planner(metric_engine, mock_scenario, "autobot", simulation_history))
+
+        # [TODO] select the best trajectory based on the metrics
+        return trajectories[0]
     
     def initialize(self, initialization: PlannerInitialization) -> None:
         """Inherited, see superclass."""
         self._model_loader.initialize()
         self._initialization = initialization
-        self._scenario = scenario
+
         
 
     def name(self) -> str:
@@ -107,7 +152,7 @@ class MultimodalMLPlanner(AbstractPlanner):
 
         # Infer model
         start_time = time.perf_counter()
-        predictions = self._infer_model(features)
+        predictions = self._infer_model(features, ego_state=history.ego_states[-1])
         self._inference_runtimes.append(time.perf_counter() - start_time)
 
         # Convert relative poses to absolute states and wrap in a trajectory object.

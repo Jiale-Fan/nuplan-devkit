@@ -83,4 +83,4 @@ feature_params:
   disable_map: False
   disable_agents: False
 
-draw_visualizations: False
+draw_visualizations: True

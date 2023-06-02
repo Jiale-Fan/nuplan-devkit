@@ -118,7 +118,7 @@ class OutputModel(nn.Module):
         self.observation_model = nn.Sequential(
             init_(nn.Linear(d_k, d_k)), nn.ReLU(),
             init_(nn.Linear(d_k, d_k)), nn.ReLU(),
-            init_(nn.Linear(d_k, 6)) # added angle distribution
+            init_(nn.Linear(d_k, 5)) # added angle distribution
         )
         self.min_stdev = 0.01
 
@@ -131,14 +131,14 @@ class OutputModel(nn.Module):
         y_mean = pred_obs[:, :, 1]
         x_sigma = F.softplus(pred_obs[:, :, 2]) + self.min_stdev
         y_sigma = F.softplus(pred_obs[:, :, 3]) + self.min_stdev
-        # rho = torch.tanh(pred_obs[:, :, 4]) * 0.9  # for stability
-        # return torch.stack([x_mean, y_mean, x_sigma, y_sigma, rho], dim=2)
+        rho = torch.tanh(pred_obs[:, :, 4]) * 0.9  # for stability
+        return torch.stack([x_mean, y_mean, x_sigma, y_sigma, rho], dim=2)
 
         # theta_mean = torch.clip(pred_obs[:,:,4], min=-np.pi, max=np.pi)
-        theta_mean = torch.tanh(pred_obs[:,:,4])*np.pi
-        theta_sigma = F.softplus(pred_obs[:, :, 5]) + self.min_stdev
+        # theta_mean = torch.tanh(pred_obs[:,:,4])*np.pi
+        # theta_sigma = F.softplus(pred_obs[:, :, 5]) + self.min_stdev
 
-        return torch.stack([x_mean, y_mean, x_sigma, y_sigma, theta_mean, theta_sigma], dim=2)
+        # return torch.stack([x_mean, y_mean, x_sigma, y_sigma, theta_mean, theta_sigma], dim=2)
 
 
 class AutoBotEgo(TorchModuleWrapper):

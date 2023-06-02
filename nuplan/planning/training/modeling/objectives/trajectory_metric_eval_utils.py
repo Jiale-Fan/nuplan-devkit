@@ -54,10 +54,6 @@ from nuplan.planning.simulation.trajectory.interpolated_trajectory import Interp
 #     history = SimulationHistory(scenario.map_api, scenario.get_mission_goal(), )
 #     return history
 
-def select_best_trajectory(trajectories: Trajectory, scenario: AbstractScenario, metric_config_path: str) -> Trajectory:
-    metrics = instantiate(metric_config_path)
-    pass
-
 def get_metric_scores(trajectories: Trajectory, scenarios: ScenarioListType, metric: MetricBase, close_loop = False) -> Tensor:
 
     score_list = []
@@ -66,6 +62,13 @@ def get_metric_scores(trajectories: Trajectory, scenarios: ScenarioListType, met
         score_list.append( get_single_metric_score(history, scenario, metric))
     return Tensor(score_list)
         
+def get_metric_scores(trajectories: Trajectory, scenario: AbstractScenario, metric: MetricBase, close_loop = False) -> Tensor:
+
+    score_list = []
+    for trajectory in trajectories:
+        history = get_simulation_history(trajectory, scenario, time_horizon = 8.0, close_loop=close_loop)
+        score_list.append( get_single_metric_score(history, scenario, metric))
+    return Tensor(score_list)
 
 def get_single_metric_score(history: SimulationHistory, scenario: AbstractScenario, metric: MetricBase) -> float:
     """

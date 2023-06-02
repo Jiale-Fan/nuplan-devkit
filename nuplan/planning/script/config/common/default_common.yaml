@@ -6,8 +6,8 @@ defaults:
   - scenario_filter: one_continuous_log
   - model: null
   # Worker that is used to run simulations
-  - worker: ray_distributed
-  # - worker: sequential # error
+  # - worker: ray_distributed
+  - worker: sequential # error
 
 distribute_by_scenario: true
 
