@@ -277,11 +277,12 @@ class NuplanToAutobotsConverter:
 
         trajs_3=torch.clone(trajs[:,:,:3]) # shape [B, T, 3]
         # trajs_3[:,:,-1] = trajs[:,:,-2] # angle prediction, deprecated
+        trajs_3[:,:,-1] = 0
         
-        ang_vec=trajs_3[:,1:,:2] - trajs_3[:,:-1,:2] 
-        ang = torch.atan2(ang_vec[:,:,0], ang_vec[:,:,1])
-        trajs_3[:,:-1,2] = ang
-        trajs_3[:,-1,2] = trajs_3[:,-2,2]
+        # ang_vec=trajs_3[:,1:,:2] - trajs_3[:,:-1,:2] 
+        # ang = torch.atan2(ang_vec[:,:,0], ang_vec[:,:,1])
+        # trajs_3[:,:-1,2] = ang
+        # trajs_3[:,-1,2] = trajs_3[:,-2,2]
 
         return Trajectory(data=trajs_3)
     

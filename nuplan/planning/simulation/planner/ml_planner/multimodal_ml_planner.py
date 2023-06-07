@@ -127,6 +127,7 @@ class MultimodalMLPlanner(AbstractPlanner):
             metrics_list.append(run_metric_engine_planner(metric_engine, mock_scenario, "autobot", mock_simulation_history))
 
         score_list = self._extract_metric_scores(metrics_list)
+        print(score_list)
         best_traj_idx = np.argmax(score_list)
         # [TODO] select the best trajectory based on the metrics
         selected_traj = traj_list[best_traj_idx].data[0]
