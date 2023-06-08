@@ -277,12 +277,12 @@ class NuplanToAutobotsConverter:
 
         trajs_3=torch.clone(trajs[:,:,:3]) # shape [B, T, 3]
         # trajs_3[:,:,-1] = trajs[:,:,-2] # angle prediction, deprecated
-        trajs_3[:,:,-1] = 0
+        # trajs_3[:,:,-1] = 0
         
-        # ang_vec=trajs_3[:,1:,:2] - trajs_3[:,:-1,:2] 
-        # ang = torch.atan2(ang_vec[:,:,0], ang_vec[:,:,1])
-        # trajs_3[:,:-1,2] = ang
-        # trajs_3[:,-1,2] = trajs_3[:,-2,2]
+        ang_vec=trajs_3[:,1:,:2] - trajs_3[:,:-1,:2] 
+        ang = torch.atan2(ang_vec[:,:,1], ang_vec[:,:,0])
+        trajs_3[:,:-1,2] = ang
+        trajs_3[:,-1,2] = trajs_3[:,-2,2]
 
         return Trajectory(data=trajs_3)
     
@@ -293,9 +293,11 @@ class NuplanToAutobotsConverter:
         multimodal_trajectories = out_dists.clone()
         multimodal_trajectories = multimodal_trajectories.permute(2, 0, 1, 3)  # [B, c, T, 5]
         multimodal_trajectories = multimodal_trajectories[:,:,:,:3]
+
+        multimodal_trajectories[:,:,:,2] = 0
         
         ang_vec=multimodal_trajectories[:,:,1:,:2] - multimodal_trajectories[:,:,:-1,:2]  # [B, c, T-1, 2]
-        ang = torch.atan2(ang_vec[..., 0], ang_vec[..., 1]) # [B, c, T-1]
+        ang = torch.atan2(ang_vec[..., 1], ang_vec[..., 0]) # [B, c, T-1]
         multimodal_trajectories[..., :-1, 2] = ang
         multimodal_trajectories[:,:,-1,2] = multimodal_trajectories[:,:,-2,2]
 

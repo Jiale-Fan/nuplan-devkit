@@ -83,5 +83,3 @@ feature_params:
   interpolation_method: linear
   disable_map: False
   disable_agents: False
-
-draw_visualizations: True

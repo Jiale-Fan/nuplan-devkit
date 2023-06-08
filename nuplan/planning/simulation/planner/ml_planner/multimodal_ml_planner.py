@@ -16,6 +16,7 @@ from nuplan.planning.simulation.planner.ml_planner.transform_utils import transf
 from nuplan.planning.simulation.planner.planner_report import MLPlannerReport
 from nuplan.planning.simulation.trajectory.abstract_trajectory import AbstractTrajectory
 from nuplan.planning.simulation.trajectory.interpolated_trajectory import InterpolatedTrajectory
+from nuplan.planning.simulation.history.simulation_history import SimulationHistory, SimulationHistorySample
 from nuplan.planning.training.modeling.torch_module_wrapper import TorchModuleWrapper
 from nuplan.planning.training.modeling.types import FeaturesType
 from nuplan.planning.training.preprocessing.features.trajectory import Trajectory
@@ -32,13 +33,20 @@ from nuplan.common.actor_state.ego_state import EgoState
 
 from nuplan.planning.simulation.callback.metric_callback import run_metric_engine_planner
 from nuplan.planning.simulation.history.simulation_history_buffer import SimulationHistoryBuffer
+from nuplan.planning.training.preprocessing.features.vector_set_map import VectorSetMap
+from nuplan.planning.training.preprocessing.features.generic_agents import GenericAgents
+from nuplan.planning.training.callbacks.utils.visualization_utils import (
+    get_raster_from_vector_map_with_agents, get_raster_from_vector_map_with_agents_multiple_trajectories
+)
+import cv2
+
 class MultimodalMLPlanner(AbstractPlanner):
     """
     Implements abstract planner interface.
     Used for simulating any ML planner trained through the nuPlan training framework.
     """
 
-    def __init__(self, model: TorchModuleWrapper, **args) -> None:
+    def __init__(self, model: TorchModuleWrapper, draw_visualization: bool = False) -> None:
         """
         Initializes the ML planner class.
         :param model: Model to use for inference.
@@ -55,10 +63,22 @@ class MultimodalMLPlanner(AbstractPlanner):
         self._feature_building_runtimes: List[float] = []
         self._inference_runtimes: List[float] = []
 
+        self.draw_visualization = draw_visualization
+        self.img_num = 0
+
         # Parse the YAML string into a DictConfig object
         self.metric_config = OmegaConf.create(PLANNER_METRICS_CONFIG)
-        self._metric_weights = {'drivable_area_compliance': 1,
-                                  'ego_is_comfortable': 0.1, 'driving_direction_compliance': 0.8}
+
+        # self._metric_weights = {'drivable_area_compliance': 1,
+        #                           'ego_is_comfortable': 0.1, 'driving_direction_compliance': 0.8, 
+        #                           'speed_limit_compliance': 0.3, 'ego_mean_speed': 1}
+
+        self._metric_names = ['drivable_area_compliance', 'driving_direction_compliance',
+                             'speed_limit_compliance', 'ego_mean_speed', 'ego_is_comfortable']
+        self._metric_weights = np.array([np.nan, np.nan, 1, 0.8, 0.5])
+        
+        # CAUTION: If new metric terms are added or the order of the terms
+        # ego_mean_speed is normalized from 0 to 1
         
 
     def _infer_model(self, features: FeaturesType) -> npt.NDArray[np.float32]:
@@ -122,31 +142,55 @@ class MultimodalMLPlanner(AbstractPlanner):
             mock_simulation_history = Mock(spec=SimulationHistory)
             mock_simulation_history.extract_ego_state = ego_states_list
             mock_simulation_history.map_api = self._initialization.map_api
+            mock_simulation_history.data = [SimulationHistorySample(None, ego_state, None, None, None) for ego_state in ego_states_list]
             
             metric_engine = build_metrics_engines_planner(self.metric_config, mock_scenario)
             metrics_list.append(run_metric_engine_planner(metric_engine, mock_scenario, "autobot", mock_simulation_history))
 
-        score_list = self._extract_metric_scores(metrics_list)
-        print(score_list)
-        best_traj_idx = np.argmax(score_list)
+        score_mat = self._extract_metric_scores(metrics_list)
+
+        overall_scores = self._get_overall_metric_scores(score_mat)
+
+        print(["{:.2f}".format(item) for item in overall_scores])
+        best_traj_idx = np.argmax(overall_scores)
         # [TODO] select the best trajectory based on the metrics
         selected_traj = traj_list[best_traj_idx].data[0]
         return selected_traj
     
+    def _get_overall_metric_scores(self, metrics_mat: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
+        if 'ego_mean_speed' in self._metric_names:
+            mean_speed_index = self._metric_names.index('ego_mean_speed')
+            # normalize the mean speed
+            metrics_mat[:, mean_speed_index] = metrics_mat[:, mean_speed_index] / np.max(metrics_mat[:, mean_speed_index])
+        
 
-    def _extract_metric_scores(self, metrics_list: List[Dict[str, float]]) -> Dict[str, float]:
-        score_list = []
+        overall_scores = np.dot(metrics_mat[:,-3:], self._metric_weights[-3:])*np.product(metrics_mat[:,:-3], axis=1)
+        return overall_scores
+
+    def _extract_metric_scores(self, metrics_list: List[Dict[str, float]]) -> npt.NDArray[np.float32]:
+        score_mat_list = []
+        self.metric_memory = []
         for i, metric_for_one_traj in enumerate(metrics_list):
             metric_dict = {metric_term.key.metric_name: \
                            metric_term.metric_statistics for metric_term in metric_for_one_traj['unknown_unknown_autobot']}
             considered_scores = []
-            considered_score_weights = []
-            for metric_key in self._metric_weights.keys():
-                considered_scores.append(metric_dict[metric_key][0].metric_score)
-                considered_score_weights.append(self._metric_weights[metric_key])
-            score_list.append(np.dot(considered_scores, considered_score_weights))
 
-        return score_list
+            metric_dict_extracted = {}
+            for metric_key in self._metric_names:
+                
+                if metric_key == 'ego_mean_speed':
+                    considered_scores.append(metric_dict[metric_key][0].statistics[0].value)
+                    metric_dict_extracted[metric_key] = metric_dict[metric_key][0].statistics[0].value
+                else:
+                    considered_scores.append(metric_dict[metric_key][0].metric_score)
+                    metric_dict_extracted[metric_key] = metric_dict[metric_key][0].metric_score
+
+            score_mat_list.append(considered_scores)
+            self.metric_memory.append(metric_dict_extracted)
+
+        score_mat = np.array(score_mat_list)
+
+        return score_mat
             
 
     def initialize(self, initialization: PlannerInitialization) -> None:
@@ -185,6 +229,9 @@ class MultimodalMLPlanner(AbstractPlanner):
         trajectories_object = Trajectory(trajectories_tensor[0])
         selected_trajectory = self._select_best_trajectory(trajectories_object, history)
 
+        if self.draw_visualization:
+            self._draw_visualization(features, selected_trajectory, trajectories_tensor)
+
         self._inference_runtimes.append(time.perf_counter() - start_time)
 
         # Convert relative poses to absolute states and wrap in a trajectory object.
@@ -194,6 +241,23 @@ class MultimodalMLPlanner(AbstractPlanner):
         trajectory = InterpolatedTrajectory(states)
 
         return trajectory
+
+    def _draw_visualization(self, features: FeaturesType, selected_trajectory: npt.NDArray[np.float32], multimodal_trajectory: npt.NDArray[np.float32]) -> None:
+
+        vector_set_map_data = cast(VectorSetMap, features["vector_set_map"])
+        ego_agent_features = cast(GenericAgents, features["generic_agents"])
+        selected_trajectory = Trajectory(data=selected_trajectory)
+
+        multimodal_traj_draw = Trajectory(data=multimodal_trajectory.squeeze(0))
+        image_ndarray = get_raster_from_vector_map_with_agents_multiple_trajectories(vector_set_map_data.to_device('cpu'),
+                                                                ego_agent_features.to_device('cpu'), 
+                                                                target_trajectory=None,
+                                                predicted_trajectory=multimodal_traj_draw, 
+                                                selected_trajectory=selected_trajectory,
+                                                pixel_size=0.1)
+        cv2.imwrite(f"/data1/nuplan/jiale/exp/autobots_experiment/images/multimodal_vis_{self.img_num:04d}.png", image_ndarray)
+        self.img_num += 1
+
 
     def generate_planner_report(self, clear_stats: bool = True) -> PlannerReport:
         """Inherited, see superclass."""

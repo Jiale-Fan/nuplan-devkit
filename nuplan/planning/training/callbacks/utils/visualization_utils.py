@@ -35,16 +35,16 @@ class Color(Enum):
     BOUNDARY: Tuple[float, float, float] = (255, 0, 0)
 
 class MultiTrajColor(Enum):
-    COLOR1: Tuple[float, float, float] = (255, 0, 0)
-    COLOR2: Tuple[float, float, float] = (0, 255, 0)
-    COLOR3: Tuple[float, float, float] = (0, 0, 255)
-    COLOR4: Tuple[float, float, float] = (255, 255, 0)
-    COLOR5: Tuple[float, float, float] = (255, 0, 255)
-    COLOR6: Tuple[float, float, float] = (0, 255, 255)
-    COLOR7: Tuple[float, float, float] = (255, 127, 0)
-    COLOR8: Tuple[float, float, float] = (75, 0, 130)
-    COLOR9: Tuple[float, float, float] = (148, 0, 211)
-    COLOR10: Tuple[float, float, float] = (255, 255, 255)
+    COLOR1: Tuple[float, float, float] = (0, 0, 255)
+    COLOR2: Tuple[float, float, float] = (0, 102, 255)
+    COLOR3: Tuple[float, float, float] = (0, 255, 255)
+    COLOR4: Tuple[float, float, float] = (0, 255, 0)
+    COLOR5: Tuple[float, float, float] = (255, 255, 0)
+    COLOR6: Tuple[float, float, float] = (255, 0, 0)
+    COLOR7: Tuple[float, float, float] = (255, 166, 0)
+    COLOR8: Tuple[float, float, float] = (255, 102, 0)
+    COLOR9: Tuple[float, float, float] = (255, 38, 0)
+    COLOR10: Tuple[float, float, float] = (255, 0, 0)
     
         # , # Red
         # (255, 127, 0), # Orange
@@ -383,6 +383,7 @@ def get_raster_from_vector_map_with_agents_multiple_trajectories(
     agents: Union[Agents, GenericAgents],
     target_trajectory: Optional[Trajectory] = None,
     predicted_trajectory: Optional[Trajectory] = None,
+    selected_trajectory: Optional[Trajectory] = None,
     pixel_size: float = 0.5,
     bit_shift: int = 12,
     radius: float = 50.0,
@@ -424,6 +425,8 @@ def get_raster_from_vector_map_with_agents_multiple_trajectories(
         trajectory_list = predicted_trajectory.unpack()
         for i, trajectory in enumerate(trajectory_list):
             _draw_trajectory(image, trajectory, MultiTrajColor.get_color_by_number(i), pixel_size)
+    if selected_trajectory is not None:
+        _draw_trajectory(image, selected_trajectory, Color.PREDICTED_TRAJECTORY, pixel_size)
 
     return image
 

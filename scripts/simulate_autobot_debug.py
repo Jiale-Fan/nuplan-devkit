@@ -171,5 +171,5 @@ if __name__ == '__main__':
     """
     conda activate nuplan
 cd ~/Documents/master/nuplan-devkit
-python ./scripts/simulate_autobots.py 
+python ./scripts/simulate_autobots_debug.py 
     """
