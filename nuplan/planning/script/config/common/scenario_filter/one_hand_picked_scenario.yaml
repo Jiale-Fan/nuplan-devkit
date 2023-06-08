@@ -1,42 +1,16 @@
 _target_: nuplan.planning.scenario_builder.scenario_filter.ScenarioFilter
 _convert_: 'all'
 
-# scenario_types:                     # List of scenario types to include
-  # - on_pickup_dropoff
-scenario_types: null
-# scenario_tokens: null               # List of scenario tokens to include
-scenario_tokens: 
-  - 0375aa2f2a655aeb # start_left_turn
-  # - 8fc9474f19a35ab8 # changing_lane
-  # - 5d5bb12137365383 # near_multiple_vehicle
-  # - 9819d0c028cf5fae # high_magnitude_speed
-  # - 15416947b62a540e # behind_long_vehicles
-  # -  5d91ff45ef9d568f # following_lane_with_lead
-  # - eca32130c66755c1 # low_magnitude_speed
-  # - 071a85ec506d52c2 # starting_straight_traffic_light_intersection_traversal
-  # - 6a4c5c00b90b5989 # stationary_in_traffic
-  # - a7805c20b5bd5f48 # traversing_pickup_dropoff
-  # - 3067b95389355d30 # waiting_for_pedestrian_to_cross
+scenario_types:                     # List of scenario types to include
+  - on_pickup_dropoff
+scenario_tokens: null               # List of scenario tokens to include
 
 log_names:                          # Filter scenarios by log names
-  - 2021.10.05.08.44.14_veh-53_00010_00964 # start_left_turn
-  # - 2021.06.07.12.42.11_veh-38_04779_06284 # changing_lane
-  # - 2021.06.08.18.59.48_veh-12_03766_03974 # near_multiple_vehicle
-  # - 2021.10.12.18.48.46_veh-28_01118_01360 # high_magnitude_speed
-  # - 2021.06.07.12.42.11_veh-38_00741_01497 # behind_long_vehicles
-  # - 2021.06.07.11.59.52_veh-35_00765_01072 # following_lane_with_lead
-  # - 2021.06.07.11.59.52_veh-35_00095_00555 # low_magnitude_speed
-  # - 2021.09.20.14.14.58_veh-28_00694_01178 # starting_straight_traffic_light_intersection_traversal
-  # - 2021.06.08.17.29.54_veh-16_01034_01609 # stationary_in_traffic
-  # - 2021.06.07.17.46.49_veh-35_00005_00785 # traversing_pickup_dropoff
-  # - 2021.08.23.18.02.44_veh-40_01476_01735 # waiting_for_pedestrian_to_cross
+  - 2021.07.16.20.45.29_veh-35_01095_01486
+map_names:                          # Filter scenarios by map names
+  - us-nv-las-vegas-strip
 
-# map_names:                          # Filter scenarios by map names
-  # - us-nv-las-vegas-strip
-
-map_names: null
-
-num_scenarios_per_type: null           # Number of scenarios per type
+num_scenarios_per_type: 1           # Number of scenarios per type
 limit_total_scenarios: null         # Limit total scenarios (float = fraction, int = num) - this filter can be applied on top of num_scenarios_per_type
 timestamp_threshold_s: null         # Filter scenarios to ensure scenarios have more than `timestamp_threshold_s` seconds between their initial lidar timestamps
 ego_displacement_minimum_m: null    # Whether to remove scenarios where the ego moves less than a certain amount

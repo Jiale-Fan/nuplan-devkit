@@ -5,7 +5,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from models.context_encoders import MapEncoderPtsMA
+from nuplan.planning.training.modeling.models.context_encoders import MapEncoderPtsMA
+
+from nuplan.planning.training.modeling.torch_module_wrapper import TorchModuleWrapper
 
 
 def init(module, weight_init, bias_init, gain=1):
@@ -72,7 +74,7 @@ class OutputModel(nn.Module):
             return torch.stack([x_mean, y_mean, x_sigma, y_sigma, rho], dim=2)
 
 
-class AutoBotJoint(nn.Module):
+class AutoBotJoint(TorchModuleWrapper):
     '''
     AutoBot-Joint Class.
     '''

@@ -9,7 +9,6 @@ from nuplan.planning.script.builders.model_builder import build_torch_module_wra
 from nuplan.planning.script.builders.utils.utils_type import is_target_type
 from nuplan.planning.simulation.planner.abstract_planner import AbstractPlanner
 from nuplan.planning.simulation.planner.ml_planner.ml_planner import MLPlanner
-from nuplan.planning.simulation.planner.ml_planner.multimodal_ml_planner import MultimodalMLPlanner
 from nuplan.planning.training.modeling.lightning_module_wrapper import LightningModuleWrapper
 
 
@@ -22,7 +21,7 @@ def _build_planner(planner_cfg: DictConfig, scenario: Optional[AbstractScenario]
     """
     # Remove the thread_safe element given that it's used here
     config = planner_cfg.copy()
-    if is_target_type(planner_cfg, MLPlanner) or is_target_type(planner_cfg, MultimodalMLPlanner):
+    if is_target_type(planner_cfg, MLPlanner):
         # Build model and feature builders needed to run an ML model in simulation
         torch_module_wrapper = build_torch_module_wrapper(planner_cfg.model_config)
         model = LightningModuleWrapper.load_from_checkpoint(

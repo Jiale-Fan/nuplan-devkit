@@ -11,34 +11,20 @@ from nuplan.planning.training.preprocessing.target_builders.ego_trajectory_targe
 
 from nuplan.planning.simulation.trajectory.trajectory_sampling import TrajectorySampling
 from nuplan.planning.training.preprocessing.feature_builders.vector_map_feature_builder import VectorMapFeatureBuilder
-from nuplan.planning.training.preprocessing.feature_builders.autobots_feature_builder import AutobotsMapFeatureBuilder, AutobotsAgentsFeatureBuilder, AutobotsEgoinFeatureBuilder
-from nuplan.planning.training.preprocessing.feature_builders.vector_set_map_feature_builder import VectorSetMapFeatureBuilder
-from nuplan.planning.training.preprocessing.feature_builders.generic_agents_feature_builder import GenericAgentsFeatureBuilder
-
 from nuplan.planning.training.preprocessing.features.agents import Agents
 from nuplan.planning.training.preprocessing.features.vector_map import VectorMap
-from nuplan.planning.training.preprocessing.features.vector_set_map import VectorSetMap
-from nuplan.planning.training.preprocessing.features.generic_agents import GenericAgents
-from nuplan.planning.training.preprocessing.features.tensor_target import TensorFeature
+from nuplan.planning.training.preprocessing.features.tensor_target import TensorTarget
 from nuplan.planning.training.preprocessing.feature_builders.agents_feature_builder import AgentsFeatureBuilder
 from nuplan.planning.training.preprocessing.features.autobots_feature_conversion import NuplanToAutobotsConverter
 from nuplan.planning.training.modeling.types import FeaturesType, TargetsType
-from nuplan.planning.training.modeling.models.urban_driver_open_loop_model import UrbanDriverOpenLoopModelFeatureParams
-from nuplan.planning.training.preprocessing.features.trajectory import Trajectory
 
-
-from nuplan.planning.training.modeling.models.urban_driver_open_loop_model_utils import (
-    pad_avails,
-    pad_polylines,
-)
-
-from typing import List, Optional, cast, Tuple, Union
+from typing import List, Optional, cast
 # from context_encoders import MapEncoderCNN, MapEncoderPts
 from nuplan.planning.training.modeling.models.context_encoders import MapEncoderCNN, MapEncoderPts
-from nuplan.planning.training.callbacks.utils.visualization_utils import (
-    get_raster_from_vector_map_with_agents, get_raster_from_vector_map_with_agents_multiple_trajectories
-)
-import cv2
+
+from nuplan.planning.training.preprocessing.feature_builders.autobots_feature_builder import ScenarioTypeFeatureBuilder, EgoGoalFeatureBuilder
+from nuplan.planning.training.preprocessing.feature_builders.expert_feature_builder import ExpertFeatureBuilder
+
 
 def init(module, weight_init, bias_init, gain=1):
     '''
@@ -49,15 +35,11 @@ def init(module, weight_init, bias_init, gain=1):
     return module
 
 
-
-
-
-
 class PositionalEncoding(nn.Module):
     '''
     Standard positional encoding.
     '''
-    def __init__(self, d_model, dropout=0.1, max_len=100):
+    def __init__(self, d_model, dropout=0.1, max_len=20):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
         pe = torch.zeros(max_len, d_model)
@@ -73,52 +55,28 @@ class PositionalEncoding(nn.Module):
         :param x: must be (T, B, H)
         :return:
         '''
-        # example x: [5, 808, 128], self.pe: [20, 1, 128]
         x = x + self.pe[:x.size(0), :]
         return self.dropout(x)
 
-
-# class OutputModel(nn.Module):
-#     '''
-#     This class operates on the output of AutoBot-Ego's decoder representation. It produces the parameters of a
-#     bivariate Gaussian distribution.
-#     '''
-#     def __init__(self, d_k=64):
-#         super(OutputModel, self).__init__()
-#         self.d_k = d_k
-#         init_ = lambda m: init(m, nn.init.xavier_normal_, lambda x: nn.init.constant_(x, 0), np.sqrt(2))
-#         self.observation_model = nn.Sequential(
-#             init_(nn.Linear(d_k, d_k)), nn.ReLU(),
-#             init_(nn.Linear(d_k, d_k)), nn.ReLU(),
-#             init_(nn.Linear(d_k, 5))
-#         )
-#         self.min_stdev = 0.01
-
-#     def forward(self, agent_decoder_state):
-#         T = agent_decoder_state.shape[0]
-#         BK = agent_decoder_state.shape[1]
-#         pred_obs = self.observation_model(agent_decoder_state.reshape(-1, self.d_k)).reshape(T, BK, -1)
-
-#         x_mean = pred_obs[:, :, 0]
-#         y_mean = pred_obs[:, :, 1]
-#         x_sigma = F.softplus(pred_obs[:, :, 2]) + self.min_stdev
-#         y_sigma = F.softplus(pred_obs[:, :, 3]) + self.min_stdev
-#         rho = torch.tanh(pred_obs[:, :, 4]) * 0.9  # for stability
-#         return torch.stack([x_mean, y_mean, x_sigma, y_sigma, rho], dim=2)
 
 class OutputModel(nn.Module):
     '''
     This class operates on the output of AutoBot-Ego's decoder representation. It produces the parameters of a
     bivariate Gaussian distribution.
     '''
-    def __init__(self, d_k=64):
+    def __init__(self, d_k=64, predict_yaw=False):
         super(OutputModel, self).__init__()
         self.d_k = d_k
+        self.predict_yaw = predict_yaw
+        out_len = 5
+        if predict_yaw:
+            out_len = 6
+        
         init_ = lambda m: init(m, nn.init.xavier_normal_, lambda x: nn.init.constant_(x, 0), np.sqrt(2))
         self.observation_model = nn.Sequential(
             init_(nn.Linear(d_k, d_k)), nn.ReLU(),
             init_(nn.Linear(d_k, d_k)), nn.ReLU(),
-            init_(nn.Linear(d_k, 5)) # added angle distribution
+            init_(nn.Linear(d_k, out_len))
         )
         self.min_stdev = 0.01
 
@@ -132,13 +90,13 @@ class OutputModel(nn.Module):
         x_sigma = F.softplus(pred_obs[:, :, 2]) + self.min_stdev
         y_sigma = F.softplus(pred_obs[:, :, 3]) + self.min_stdev
         rho = torch.tanh(pred_obs[:, :, 4]) * 0.9  # for stability
-        return torch.stack([x_mean, y_mean, x_sigma, y_sigma, rho], dim=2)
-
-        # theta_mean = torch.clip(pred_obs[:,:,4], min=-np.pi, max=np.pi)
-        # theta_mean = torch.tanh(pred_obs[:,:,4])*np.pi
-        # theta_sigma = F.softplus(pred_obs[:, :, 5]) + self.min_stdev
-
-        # return torch.stack([x_mean, y_mean, x_sigma, y_sigma, theta_mean, theta_sigma], dim=2)
+        # return torch.stack([x_mean, y_mean, x_sigma, y_sigma, rho], dim=2)
+    
+        if self.predict_yaw:
+            yaws = pred_obs[:, :, 5]  # for stability
+            return torch.stack([x_mean, y_mean, x_sigma, y_sigma, rho, yaws], dim=2)
+        else:
+            return torch.stack([x_mean, y_mean, x_sigma, y_sigma, rho], dim=2)
 
 
 class AutoBotEgo(TorchModuleWrapper):
@@ -146,52 +104,63 @@ class AutoBotEgo(TorchModuleWrapper):
     AutoBot-Ego Class.
     '''
     def __init__(self, 
-        vector_map_feature_radius: int,
-        vector_map_connection_scales: Optional[List[int]],
-        past_trajectory_sampling: TrajectorySampling,
-        future_trajectory_sampling: TrajectorySampling,
-        feature_params: UrbanDriverOpenLoopModelFeatureParams,
-        d_k=128, _M=5, c=5, T=30, L_enc=1, dropout=0.0, k_attr=2, map_attr=3,
-        num_heads=16, L_dec=1, tx_hidden_size=384, use_map_img=False, use_map_lanes=False, 
-        draw_visualizations = False
+        vector_map_feature_radius: int = 50,
+        vector_map_connection_scales: Optional[List[int]] = [1, 2, 3, 4],
+        past_trajectory_sampling: TrajectorySampling = TrajectorySampling(num_poses=4, time_horizon=1.5),
+        future_trajectory_sampling: TrajectorySampling = TrajectorySampling(num_poses=16, time_horizon=8),
+        expert_trajectory_sampling: TrajectorySampling = TrajectorySampling(num_poses=30, time_horizon=15),
+        d_k: int = 128,
+        _M: int = 5,
+        c: int = 5,
+        T: int = 30,
+        L_enc: int = 1,
+        dropout: float = 0.0,
+        k_attr: int = 2,
+        map_attr: int = 3,
+        num_heads: int = 16,
+        L_dec: int = 1,
+        tx_hidden_size: int = 384,
+        use_map_img: bool = False,
+        use_map_lanes: bool = False,
+        predict_yaw: bool = False
         ):
-
-        self.draw_visualizations = draw_visualizations
-
-        self.converter = NuplanToAutobotsConverter(_M=_M)
-        self._feature_params = feature_params
-
-        self.img_num = 0
-        
-        super().__init__(
-            feature_builders=[
-                VectorSetMapFeatureBuilder(
-                    map_features=feature_params.map_features,
-                    max_elements=feature_params.max_elements,
-                    max_points=feature_params.max_points,
-                    radius=feature_params.vector_set_map_feature_radius,
-                    interpolation_method=feature_params.interpolation_method,
-                ),
-                GenericAgentsFeatureBuilder(feature_params.agent_features, feature_params.past_trajectory_sampling),
-            ],
-            target_builders=[EgoTrajectoryTargetBuilder(future_trajectory_sampling=future_trajectory_sampling),
-             AutobotsPredNominalTargetBuilder(), AutobotsModeProbsNominalTargetBuilder()],
-            future_trajectory_sampling=future_trajectory_sampling,
-        )
+        """
+        :param vector_map_feature_radius: The query radius scope relative to the current ego-pose.
+        :param vector_map_connection_scales: The hops of lane neighbors to extract, default 1 hop
+        :param past_trajectory_sampling: Sampling parameters for past trajectory
+        :param future_trajectory_sampling: Sampling parameters for future trajectory
+        """
 
         # super().__init__(
         #     feature_builders=[
-        #         VectorMapFeatureBuilder(
+        #         AutobotsMapFeatureBuilder(
         #             radius=vector_map_feature_radius,
         #             connection_scales=vector_map_connection_scales,
         #         ),
-        #         AgentsFeatureBuilder(trajectory_sampling=past_trajectory_sampling),
+        #         AutobotsAgentsFeatureBuilder(trajectory_sampling=past_trajectory_sampling),
         #     ],
-        #     target_builders=[EgoTrajectoryTargetBuilder(future_trajectory_sampling=future_trajectory_sampling),
-        #     AutobotsPredNominalTargetBuilder(), AutobotsModeProbsNominalTargetBuilder()],
-        #     # target_builders=[EgoTrajectoryTargetBuilder(future_trajectory_sampling=future_trajectory_sampling)],
+        #     target_builders=[AutobotsTargetBuilder(future_trajectory_sampling=future_trajectory_sampling),
+        #     EgoTrajectoryTargetBuilder(future_trajectory_sampling=future_trajectory_sampling)],
         #     future_trajectory_sampling=future_trajectory_sampling,
         # )
+
+        super().__init__(
+            feature_builders=[
+                VectorMapFeatureBuilder(
+                    radius=vector_map_feature_radius,
+                    connection_scales=vector_map_connection_scales,
+                ),
+                AgentsFeatureBuilder(trajectory_sampling=past_trajectory_sampling),
+                ScenarioTypeFeatureBuilder(),
+                ExpertFeatureBuilder(trajectory_sampling=expert_trajectory_sampling),
+                # EgoGoalFeatureBuilder(),
+            ],
+            target_builders=[EgoTrajectoryTargetBuilder(future_trajectory_sampling=future_trajectory_sampling),
+                             AutobotsPredNominalTargetBuilder(),
+                             AutobotsModeProbsNominalTargetBuilder()],
+            # target_builders=[EgoTrajectoryTargetBuilder(future_trajectory_sampling=future_trajectory_sampling)],
+            future_trajectory_sampling=future_trajectory_sampling,
+        )
 
         init_ = lambda m: init(m, nn.init.xavier_normal_, lambda x: nn.init.constant_(x, 0), np.sqrt(2))
 
@@ -208,8 +177,9 @@ class AutoBotEgo(TorchModuleWrapper):
         self.tx_hidden_size = tx_hidden_size
         self.use_map_img = use_map_img
         self.use_map_lanes = use_map_lanes
+        self.predict_yaw = predict_yaw
 
-        
+        self.converter = NuplanToAutobotsConverter(_M=_M)
 
         # INPUT ENCODERS
         self.agents_dynamic_encoder = nn.Sequential(init_(nn.Linear(k_attr, d_k)))
@@ -254,12 +224,8 @@ class AutoBotEgo(TorchModuleWrapper):
         # ============================== Positional encoder ==============================
         self.pos_encoder = PositionalEncoding(d_k, dropout=0.0)
 
-        # ?
-        # self.pos_encoder_route = LearntPositionalEncoding(d_k, dropout=0.0)
-        # self.pos_encoder_social = PositionalEncoding(d_k, dropout=0.0)
-
         # ============================== OUTPUT MODEL ==============================
-        self.output_model = OutputModel(d_k=self.d_k)
+        self.output_model = OutputModel(d_k=self.d_k, predict_yaw=self.predict_yaw)
 
         # ============================== Mode Prob prediction (P(z|X_1:t)) ==============================
         self.P = nn.Parameter(torch.Tensor(c, 1, d_k), requires_grad=True)  # Appendix C.2.
@@ -277,6 +243,9 @@ class AutoBotEgo(TorchModuleWrapper):
         self.prob_predictor = init_(nn.Linear(self.d_k, 1))
 
         self.train()
+        
+    def name(self) -> str:
+        return self.__class__.__name__
 
     def generate_decoder_mask(self, seq_len, device):
         ''' For masking out the subsequent info. '''
@@ -326,214 +295,20 @@ class AutoBotEgo(TorchModuleWrapper):
         T_obs = agents_emb.size(0)
         B = agent_masks.size(0)
         agents_emb = agents_emb.permute(2, 1, 0, 3).reshape(self._M + 1, B * T_obs, -1)
-        # [TODO]
-        # agents_soc_emb = layer(self.pos_encoder(agents_emb), src_key_padding_mask=agent_masks.view(-1, self._M+1))
         agents_soc_emb = layer(agents_emb, src_key_padding_mask=agent_masks.view(-1, self._M+1))
         agents_soc_emb = agents_soc_emb.view(self._M+1, B, T_obs, -1).permute(2, 1, 0, 3)
         return agents_soc_emb
-
-
-    def extract_agent_features(
-        self, ego_agent_features: GenericAgents, batch_size: int
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Extract ego and agent features into format expected by network and build accompanying availability matrix.
-        :param ego_agent_features: agent features to be extracted (ego + other agents)
-        :param batch_size: number of samples in batch to extract
-        :return:
-            agent_features: <torch.FloatTensor: batch_size, num_elements (polylines) (1+max_agents*num_agent_types),
-                num_points_per_element, feature_dimension>. Stacked ego, agent, and map features.
-            agent_avails: <torch.BoolTensor: batch_size, num_elements (polylines) (1+max_agents*num_agent_types),
-                num_points_per_element>. Bool specifying whether feature is available or zero padded.
-        """
-        agent_features = []  # List[<torch.FloatTensor: max_agents+1, total_max_points, feature_dimension>: batch_size]
-        agent_avails = []  # List[<torch.BoolTensor: max_agents+1, total_max_points>: batch_size]
-
-        # features have different size across batch so we use per sample feature extraction
-        for sample_idx in range(batch_size):
-            # Ego features
-            # maintain fixed feature size through trimming/padding
-            sample_ego_feature = ego_agent_features.ego[sample_idx][
-                ..., : min(self._feature_params.ego_dimension, self._feature_params.feature_dimension)
-            ].unsqueeze(0)
-            if (
-                min(self._feature_params.ego_dimension, GenericAgents.ego_state_dim())
-                < self._feature_params.feature_dimension
-            ):
-                sample_ego_feature = pad_polylines(sample_ego_feature, self._feature_params.feature_dimension, dim=2)
-
-            sample_ego_avails = torch.ones(
-                sample_ego_feature.shape[0],
-                sample_ego_feature.shape[1],
-                dtype=torch.bool,
-                device=sample_ego_feature.device,
-            )
-
-            # reverse points so frames are in reverse chronological order, i.e. (t_0, t_-1, ..., t_-N)
-            sample_ego_feature = torch.flip(sample_ego_feature, dims=[1])
-
-            # maintain fixed number of points per polyline
-            sample_ego_feature = sample_ego_feature[:, : self._feature_params.total_max_points, ...]
-            sample_ego_avails = sample_ego_avails[:, : self._feature_params.total_max_points, ...]
-            if sample_ego_feature.shape[1] < self._feature_params.total_max_points:
-                sample_ego_feature = pad_polylines(sample_ego_feature, self._feature_params.total_max_points, dim=1)
-                sample_ego_avails = pad_avails(sample_ego_avails, self._feature_params.total_max_points, dim=1)
-
-            sample_features = [sample_ego_feature]
-            sample_avails = [sample_ego_avails]
-
-            # Agent features
-            agent_types_num = len(self._feature_params.agent_features)
-            for i, feature_name in enumerate(self._feature_params.agent_features):
-                # if there exist at least one valid agent in the sample
-                if ego_agent_features.has_agents(feature_name, sample_idx):
-                    # num_frames x num_agents x num_features -> num_agents x num_frames x num_features
-                    sample_agent_features = torch.permute(
-                        ego_agent_features.agents[feature_name][sample_idx], (1, 0, 2)
-                    )
-
-                    # concat agent type one-hot encoding to agent features
-                    one_hot_encodings = torch.zeros((sample_agent_features.shape[0], sample_agent_features.shape[1], agent_types_num), device=sample_agent_features.device)
-                    one_hot_encodings[:, :, i] = 1
-                    sample_agent_features = torch.cat((sample_agent_features, one_hot_encodings), dim=-1)
-
-                    # maintain fixed feature size through trimming/padding
-                    sample_agent_features = sample_agent_features[
-                        ..., : min(self._feature_params.agent_dimension, self._feature_params.feature_dimension)
-                    ]
-                    if (
-                        min(self._feature_params.agent_dimension, GenericAgents.agents_states_dim())
-                        < self._feature_params.feature_dimension
-                    ):
-                        sample_agent_features = pad_polylines(
-                            sample_agent_features, self._feature_params.feature_dimension, dim=2
-                        )
-
-                    sample_agent_avails = torch.ones(
-                        sample_agent_features.shape[0],
-                        sample_agent_features.shape[1],
-                        dtype=torch.bool,
-                        device=sample_agent_features.device,
-                    )
-
-                    # reverse points so frames are in reverse chronological order, i.e. (t_0, t_-1, ..., t_-N)
-                    sample_agent_features = torch.flip(sample_agent_features, dims=[1])
-
-                    # maintain fixed number of points per polyline
-                    sample_agent_features = sample_agent_features[:, : self._feature_params.total_max_points, ...]
-                    sample_agent_avails = sample_agent_avails[:, : self._feature_params.total_max_points, ...]
-                    if sample_agent_features.shape[1] < self._feature_params.total_max_points:
-                        sample_agent_features = pad_polylines(
-                            sample_agent_features, self._feature_params.total_max_points, dim=1
-                        )
-                        sample_agent_avails = pad_avails(
-                            sample_agent_avails, self._feature_params.total_max_points, dim=1
-                        )
-
-                    # maintained fixed number of agent polylines of each type per sample
-                    sample_agent_features = sample_agent_features[: self._feature_params.max_agents, ...]
-                    sample_agent_avails = sample_agent_avails[: self._feature_params.max_agents, ...]
-                    if sample_agent_features.shape[0] < (self._feature_params.max_agents):
-                        sample_agent_features = pad_polylines(
-                            sample_agent_features, self._feature_params.max_agents, dim=0
-                        )
-                        sample_agent_avails = pad_avails(sample_agent_avails, self._feature_params.max_agents, dim=0)
-
-                else:
-                    sample_agent_features = torch.zeros(
-                        self._feature_params.max_agents,
-                        self._feature_params.total_max_points,
-                        self._feature_params.feature_dimension,
-                        dtype=torch.float32,
-                        device=sample_ego_feature.device,
-                    )
-                    sample_agent_avails = torch.zeros(
-                        self._feature_params.max_agents,
-                        self._feature_params.total_max_points,
-                        dtype=torch.bool,
-                        device=sample_agent_features.device,
-                    )
-
-                # add features, avails to sample
-                sample_features.append(sample_agent_features)
-                sample_avails.append(sample_agent_avails)
-
-            sample_features = torch.cat(sample_features, dim=0)
-            sample_avails = torch.cat(sample_avails, dim=0)
-
-            agent_features.append(sample_features)
-            agent_avails.append(sample_avails)
-        agent_features = torch.stack(agent_features)
-        agent_avails = torch.stack(agent_avails)
-
-        return agent_features, agent_avails
-
-    def extract_map_features(
-        self, vector_set_map_data: VectorSetMap, batch_size: int
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Extract map features into format expected by network and build accompanying availability matrix.
-        :param vector_set_map_data: VectorSetMap features to be extracted
-        :param batch_size: number of samples in batch to extract
-        :return:
-            map_features: <torch.FloatTensor: batch_size, num_elements (polylines) (max_lanes),
-                num_points_per_element, feature_dimension>. Stacked map features.
-            map_avails: <torch.BoolTensor: batch_size, num_elements (polylines) (max_lanes),
-                num_points_per_element>. Bool specifying whether feature is available or zero padded.
-        """
-        map_features = []  # List[<torch.FloatTensor: max_map_features, total_max_points, feature_dim>: batch_size]
-        map_avails = []  # List[<torch.BoolTensor: max_map_features, total_max_points>: batch_size]
-
-        # features have different size across batch so we use per sample feature extraction
-        for sample_idx in range(batch_size):
-
-            sample_map_features = []
-            sample_map_avails = []
-
-            for feature_name in self._feature_params.map_features:
-                coords = vector_set_map_data.coords[feature_name][sample_idx]
-                tl_data = (
-                    vector_set_map_data.traffic_light_data[feature_name][sample_idx]
-                    if feature_name in vector_set_map_data.traffic_light_data
-                    else None
-                )
-                avails = vector_set_map_data.availabilities[feature_name][sample_idx]
-
-                # add traffic light data if exists for feature
-                if tl_data is not None:
-                    coords = torch.cat((coords, tl_data), dim=2)
-
-                # maintain fixed number of points per map element (polyline)
-                coords = coords[:, : self._feature_params.total_max_points, ...]
-                avails = avails[:, : self._feature_params.total_max_points]
-
-                if coords.shape[1] < self._feature_params.total_max_points:
-                    coords = pad_polylines(coords, self._feature_params.total_max_points, dim=1)
-                    avails = pad_avails(avails, self._feature_params.total_max_points, dim=1)
-
-                # maintain fixed number of features per point
-                coords = coords[..., : self._feature_params.feature_dimension]
-                if coords.shape[2] < self._feature_params.feature_dimension:
-                    coords = pad_polylines(coords, self._feature_params.feature_dimension, dim=2)
-
-                sample_map_features.append(coords)
-                sample_map_avails.append(avails)
-
-            map_features.append(torch.cat(sample_map_features))
-            map_avails.append(torch.cat(sample_map_avails))
-
-        map_features = torch.stack(map_features)
-        map_avails = torch.stack(map_avails)
-
-        return map_features, map_avails
 
     def forward(self, features: FeaturesType) -> TargetsType:
         """
         Predict
         :param features: input features containing
                         {
-                            "tensor_map": Tensor,
+                            "vector_map": VectorMap,
                             "agents": Agents,
+                            "scenario_type": ScenarioType,
+                            "expert": Agents, (future)
+                            # "ego_goal": EgoGoal,
                         }
         :return: targets: predictions from network
                         {
@@ -542,37 +317,12 @@ class AutoBotEgo(TorchModuleWrapper):
                             "pred": TensorTarget(data=out_dists)
                         }
         """
-        vector_set_map_data = cast(VectorSetMap, features["vector_set_map"])
-        ego_agent_features = cast(GenericAgents, features["generic_agents"])
-        batch_size = ego_agent_features.batch_size
+        vector_map_data = cast(VectorMap, features["vector_map"])
+        ego_agent_features = cast(Agents, features["agents"])
 
-        # Extract features across batch
-        agent_features, agent_avails = self.extract_agent_features(ego_agent_features, batch_size)
-        map_in, map_avails = self.extract_map_features(vector_set_map_data, batch_size)
-
-
-        #     agent_features: <torch.FloatTensor: batch_size, num_elements (polylines) (1+max_agents*num_agent_types),
-        #         num_points_per_element, feature_dimension>. Stacked ego, agent, and map features.
-        #     agent_avails: <torch.BoolTensor: batch_size, num_elements (polylines) (1+max_agents*num_agent_types),
-        #         num_points_per_element>. Bool specifying whether feature is available or zero padded.
-        #     map_features: <torch.FloatTensor: batch_size, num_elements (polylines) (max_lanes),
-        #         num_points_per_element, feature_dimension>. Stacked map features.
-        #     map_avails: <torch.BoolTensor: batch_size, num_elements (polylines) (max_lanes),
-        #         num_points_per_element>. Bool specifying whether feature is available or zero padded.
-
-
-
-        # roads = cast(TensorFeature, features["tensor_map"]).data
-        # agents = cast(Agents, features["agents"])
-        # agents_in = self.converter.AgentsToAutobotsAgentsTensor(agents)
-        # ego_in= self.converter.AgentsToAutobotsEgoinTensor(agents)
-
-        roads = torch.cat((map_in, map_avails.unsqueeze(-1)), dim=3) # [8, 160, 20, 9]
-        agents_in_and_ego = torch.cat((agent_features, agent_avails.unsqueeze(-1)), dim=3).transpose(1, 2)  # agent features' feature dimension from 3 to 8 are padded with 0s.
-        ego_in = agents_in_and_ego[:, :, 0, :] # [8, 20, 9]
-        agents_in = agents_in_and_ego[:, :, 1:, :] # [8, 20, 30, 9]
-        
-        
+        roads=self.converter.VectorMapToAutobotsMapTensor(vector_map_data)
+        agents_in=self.converter.AgentsToAutobotsAgentsTensor(ego_agent_features)
+        ego_in=self.converter.AgentsToAutobotsEgoinTensor(ego_agent_features)
         '''
         :param ego_in: [B, T_obs, k_attr+1] with last values being the existence mask. 
         :param agents_in: [B, T_obs, M-1, k_attr+1] with last values being the existence mask.
@@ -580,15 +330,15 @@ class AutoBotEgo(TorchModuleWrapper):
                       [B, 3, 128, 128] image representing the road network if self.use_map_img or
                       [B, 1, 1] if self.use_map_lanes and self.use_map_img are False.
         :return:
-            pred_obs: shape [c, T, B, 5] c trajectories for the ego agents with every point being the params of
-                                        Bivariate Gaussian distribution.
+            pred_obs: shape [c, T, B, 5] c trajectories for the ego agents with every point being the params of Bivariate Gaussian distribution.
+            pred_obs: shape [c, T, B, 5(6)] c trajectories for the ego agents with every point being the params of Bivariate Gaussian distribution (and the yaw prediction if self.predict_yaw).
             mode_probs: shape [B, c] mode probability predictions P(z|X_{1:T_obs})
         '''
         # ego_in [64,4,3]
         # agents_in [64,4,7,3]
         # roads [64,100,40,4] [Batch, Segment, Points, attributes ()]
         # B should be batch
-        # T_obs should be observation Time (input time) 
+        # T_obs should be observation Time (input time)
         # k_attr should be the number of the attributes at one timestamp, namely x, y, mask
         B = ego_in.size(0)
 
@@ -608,9 +358,6 @@ class AutoBotEgo(TorchModuleWrapper):
             orig_map_features = self.map_encoder(roads)
             map_features = orig_map_features.view(B * self.c, -1).unsqueeze(0).repeat(self.T, 1, 1)
         elif self.use_map_lanes:
-            # [TODO] only add the ego agent's route with learned positional encoding.
-            # 
-            # roads = self.pos_encoder_route(roads)
             orig_map_features, orig_road_segs_masks = self.map_encoder(roads, ego_soctemp_emb)
             map_features = orig_map_features.unsqueeze(2).repeat(1, 1, self.c, 1).view(-1, B*self.c, self.d_k)
             road_segs_masks = orig_road_segs_masks.unsqueeze(1).repeat(1, self.c, 1).view(B*self.c, -1)
@@ -643,39 +390,11 @@ class AutoBotEgo(TorchModuleWrapper):
                                                  key_padding_mask=orig_road_segs_masks)[0] + mode_params_emb
         mode_probs = F.softmax(self.prob_predictor(mode_params_emb).squeeze(-1), dim=0).transpose(0, 1)
 
-        traj=self.converter.output_tensor_to_trajectory(out_dists, mode_probs)
+        trajs=self.converter.select_all_trajectories(out_dists, mode_probs)
+        traj=self.converter.select_best_trajectory(out_dists, mode_probs)
 
         # return  [c, T, B, 5], [B, c]
         # return out_dists, mode_probs
 
-        multimodal_trajectories = self.converter.output_distribution_to_multimodal_trajectories(out_dists)
-        
-        if self.draw_visualizations:
-            multimodal_traj_draw = Trajectory(data=multimodal_trajectories.squeeze(0))
-            image_ndarray = get_raster_from_vector_map_with_agents_multiple_trajectories(vector_set_map_data.to_device('cpu'),
-                                                                    ego_agent_features.to_device('cpu'), 
-                                                                    target_trajectory=None,
-                                                    predicted_trajectory=multimodal_traj_draw.to_device('cpu'), 
-                                                    pixel_size=0.1)
-            cv2.imwrite(f"/data1/nuplan/jiale/exp/autobots_experiment/images/multimodal_vis_{self.img_num:04d}.png", image_ndarray)
-            self.img_num += 1
-
-        return {"trajectory": traj, "mode_probs": TensorFeature(data=mode_probs), "pred": TensorFeature(data=out_dists),
-                "multimodal_trajectories": TensorFeature(data=multimodal_trajectories)}
+        return {"trajectory": traj, "trajectories": trajs, "mode_probs": TensorTarget(data=mode_probs), "pred": TensorTarget(data=out_dists)}
         # return {"trajectory": traj}
-
-
-# def pack_multimodal_trajectories(out_dists: Tensor) -> List[Trajectory]:
-#     """
-#         out_dists: Tensor [c, T, B, 5]
-#     """
-#     reshaped_out_dists = out_dists.permute(2, 0, 1, 3)  # [B, c, T, 5]
-#     B = reshaped_out_dists.size(0)
-#     multimodal_trajectories = []
-#     for b in range(B):
-#         traj_data = reshaped_out_dists[b, :, :, :3]
-#         traj_data[:,:,-1] = 0 # all angles being zero [TODO]
-#         traj = Trajectory(data=traj_data)
-#         multimodal_trajectories.append(traj)
-
-#     return multimodal_trajectories

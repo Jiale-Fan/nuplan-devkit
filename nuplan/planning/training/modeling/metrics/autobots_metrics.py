@@ -1,10 +1,9 @@
-
 from typing import Dict, List, cast
 import torch
 
 from nuplan.planning.training.modeling.metrics.abstract_training_metric import AbstractTrainingMetric
 from nuplan.planning.training.modeling.types import TargetsType
-from nuplan.planning.training.preprocessing.features.tensor_target import TensorFeature
+from nuplan.planning.training.preprocessing.features.tensor_target import TensorTarget
 from nuplan.planning.training.preprocessing.features.trajectory import Trajectory
 
 from nuplan.planning.training.modeling.objectives.autobots_train_helpers import nll_loss_multimodes
@@ -18,7 +17,6 @@ class AutobotsNllLoss(AbstractTrainingMetric):
     def __init__(self, entropy_weight, kl_weight, use_FDEADE_aux_loss):
         """
         Initializes the class
-
         :param name: name of the objective
         :param weight: weight contribution to the overall loss
         """
@@ -41,15 +39,14 @@ class AutobotsNllLoss(AbstractTrainingMetric):
         """
         Computes the objective's loss given the ground truth targets and the model's predictions
         and weights it based on a fixed weight factor.
-
         :param predictions: model's predictions
         :param targets: ground truth targets from the dataset
         :return: loss scalar tensor
         
         """
 
-        pred_obs = cast(TensorFeature, predictions["pred"]).data
-        mode_probs = cast(TensorFeature, predictions["mode_probs"]).data
+        pred_obs = cast(TensorTarget, predictions["pred"]).data
+        mode_probs = cast(TensorTarget, predictions["mode_probs"]).data
         targets_xy = cast(Trajectory, targets["trajectory"]).data
         
 
@@ -69,7 +66,6 @@ class AutobotsKlLoss(AbstractTrainingMetric):
     def __init__(self, entropy_weight, kl_weight, use_FDEADE_aux_loss):
         """
         Initializes the class
-
         :param name: name of the objective
         :param weight: weight contribution to the overall loss
         """
@@ -92,15 +88,14 @@ class AutobotsKlLoss(AbstractTrainingMetric):
         """
         Computes the objective's loss given the ground truth targets and the model's predictions
         and weights it based on a fixed weight factor.
-
         :param predictions: model's predictions
         :param targets: ground truth targets from the dataset
         :return: loss scalar tensor
         
         """
 
-        pred_obs = cast(TensorFeature, predictions["pred"]).data
-        mode_probs = cast(TensorFeature, predictions["mode_probs"]).data
+        pred_obs = cast(TensorTarget, predictions["pred"]).data
+        mode_probs = cast(TensorTarget, predictions["mode_probs"]).data
         targets_xy = cast(Trajectory, targets["trajectory"]).data
         
 
@@ -119,7 +114,6 @@ class AutobotsPostEntropy(AbstractTrainingMetric):
     def __init__(self, entropy_weight, kl_weight, use_FDEADE_aux_loss):
         """
         Initializes the class
-
         :param name: name of the objective
         :param weight: weight contribution to the overall loss
         """
@@ -142,15 +136,14 @@ class AutobotsPostEntropy(AbstractTrainingMetric):
         """
         Computes the objective's loss given the ground truth targets and the model's predictions
         and weights it based on a fixed weight factor.
-
         :param predictions: model's predictions
         :param targets: ground truth targets from the dataset
         :return: loss scalar tensor
         
         """
 
-        pred_obs = cast(TensorFeature, predictions["pred"]).data
-        mode_probs = cast(TensorFeature, predictions["mode_probs"]).data
+        pred_obs = cast(TensorTarget, predictions["pred"]).data
+        mode_probs = cast(TensorTarget, predictions["mode_probs"]).data
         targets_xy = cast(Trajectory, targets["trajectory"]).data
         
 
@@ -169,7 +162,6 @@ class AutobotsADEFDELoss(AbstractTrainingMetric):
     def __init__(self, entropy_weight, kl_weight, use_FDEADE_aux_loss):
         """
         Initializes the class
-
         :param name: name of the objective
         :param weight: weight contribution to the overall loss
         """
@@ -192,15 +184,14 @@ class AutobotsADEFDELoss(AbstractTrainingMetric):
         """
         Computes the objective's loss given the ground truth targets and the model's predictions
         and weights it based on a fixed weight factor.
-
         :param predictions: model's predictions
         :param targets: ground truth targets from the dataset
         :return: loss scalar tensor
         
         """
 
-        pred_obs = cast(TensorFeature, predictions["pred"]).data
-        mode_probs = cast(TensorFeature, predictions["mode_probs"]).data
+        pred_obs = cast(TensorTarget, predictions["pred"]).data
+        mode_probs = cast(TensorTarget, predictions["mode_probs"]).data
         targets_xy = cast(Trajectory, targets["trajectory"]).data
         
 
@@ -210,3 +201,4 @@ class AutobotsADEFDELoss(AbstractTrainingMetric):
                                                                                    use_FDEADE_aux_loss=self.use_FDEADE_aux_loss)
 
         return adefde_loss
+

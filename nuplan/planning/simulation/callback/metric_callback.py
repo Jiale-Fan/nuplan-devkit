@@ -11,11 +11,6 @@ from nuplan.planning.simulation.simulation_setup import SimulationSetup
 from nuplan.planning.simulation.trajectory.abstract_trajectory import AbstractTrajectory
 from nuplan.planning.utils.multithreading.worker_pool import Task, WorkerPool
 
-from typing import Any, Dict, List, Optional
-
-from nuplan.planning.metrics.abstract_metric import AbstractMetricBuilder
-from nuplan.planning.metrics.metric_file import MetricFile, MetricFileKey
-
 logger = logging.getLogger(__name__)
 
 
@@ -31,21 +26,6 @@ def run_metric_engine(
     logger.debug("Saving metric statistics!")
     metric_engine.write_to_files(metric_files)
     logger.debug("Saved metrics!")
-
-
-def run_metric_engine_planner(
-    metric_engine: MetricsEngine, scenario: AbstractScenario, planner_name: str, history: SimulationHistory
-) -> Dict[str, List[MetricFile]]:
-    """
-    Run the metric engine.
-    """
-    logger.debug("Starting metrics computation...")
-    metric_files = metric_engine.compute(history, scenario=scenario, planner_name=planner_name)
-    logger.debug("Finished metrics computation!")
-    # logger.debug("Saving metric statistics!")
-    # metric_engine.write_to_files(metric_files)
-    # logger.debug("Saved metrics!")
-    return metric_files
 
 
 class MetricCallback(AbstractCallback):

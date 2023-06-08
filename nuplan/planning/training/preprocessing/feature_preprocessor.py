@@ -98,17 +98,17 @@ class FeaturePreprocessor:
             all_cache_metadata = all_feature_cache_metadata + all_targets_cache_metadata
             return all_features, all_targets, all_cache_metadata
         except Exception as error:
-
+            
             file_name="./project_records/autobots_problematic_scenario.pkl"
             with open(file_name, 'wb') as file:
                 pickle.dump(scenario, file)
                 print(f'Problematic object successfully saved to "{file_name}"')
-                
+
             file_name="./project_records/autobots_problematic_exception.pkl"
             with open(file_name, 'wb') as file:
                 pickle.dump(error, file)
                 print(f'Problematic object successfully saved to "{file_name}"')
-
+            
             msg = (
                 f"Failed to compute features for scenario token {scenario.token} in log {scenario.log_name}\n"
                 f"Error: {error}"

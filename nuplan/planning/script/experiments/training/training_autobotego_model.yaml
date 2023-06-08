@@ -1,18 +1,17 @@
 # @package _global_
-job_name: autobots_model
+job_name: autobotego_model
 py_func: train
 objective_aggregate_mode: mean
 
 defaults:
-#   - override /data_augmentation:
-#       - kinematic_agent_augmentation
-#       - agent_dropout_augmentation
+  - override /data_augmentation:
+      - kinematic_agent_augmentation
+      - agent_dropout_augmentation
   - override /objective:
-      - autobots_objective # does this need modification?
-      # - example_metric_objective
+      - autobots_objective
   - override /splitter: nuplan
-  - override /model: autobots_model
-  - override /scenario_filter: nuplan_challenge_scenarios
+  - override /model: autobotego_model
+  - override /scenario_filter: training_scenarios
   - override /training_metric:
       - avg_displacement_error
       - avg_heading_error

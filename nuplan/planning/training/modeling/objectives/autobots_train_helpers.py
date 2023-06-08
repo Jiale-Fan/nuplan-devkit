@@ -32,10 +32,8 @@ def get_Laplace_dist(pred):
 
 def nll_pytorch_dist(pred, data, rtn_loss=True):
     """
-
     pred: [B, T, 5], bivariant Gaussian distributions
     data: [B, T, 2], samples
-
     """
     # biv_gauss_dist = get_BVG_distributions(pred)
     biv_gauss_dist = get_Laplace_dist(pred)

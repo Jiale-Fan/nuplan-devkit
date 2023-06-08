@@ -33,6 +33,8 @@ class LightningModuleWrapper(pl.LightningModule):
         lr_scheduler: Optional[DictConfig] = None,
         warm_up_lr_scheduler: Optional[DictConfig] = None,
         objective_aggregate_mode: str = 'mean',
+        nb_scenarios: int = 500,
+        nb_epochs: int = 2,
     ) -> None:
         """
         Initializes the class.
@@ -56,6 +58,8 @@ class LightningModuleWrapper(pl.LightningModule):
         self.lr_scheduler = lr_scheduler
         self.warm_up_lr_scheduler = warm_up_lr_scheduler
         self.objective_aggregate_mode = objective_aggregate_mode
+        self.nb_scenarios = nb_scenarios
+        self.nb_epochs = nb_epochs
 
         # Validate metrics objectives and model
         model_targets = {builder.get_feature_unique_name() for builder in model.get_list_of_computed_target()}
@@ -65,6 +69,14 @@ class LightningModuleWrapper(pl.LightningModule):
         for metric in self.metrics:
             for feature in metric.get_list_of_required_target_types():
                 assert feature in model_targets, f"Metric target: \"{feature}\" is not in model computed targets!"
+
+        self.list_loss : list = []
+        self.count_epoch: int = -1
+        self.count_train_step: int = 0
+        self.count_train_step_total: int = 0
+        self.count_val_step: int = 0
+        self.count_val_step_total: int = 0
+        self.previous_prefix: str = "val"
 
     def _step(self, batch: Tuple[FeaturesType, TargetsType, ScenarioListType], prefix: str) -> torch.Tensor:
         """
@@ -127,13 +139,46 @@ class LightningModuleWrapper(pl.LightningModule):
         :param loss_name: name given to the loss for logging
         """
         self.log(f'loss/{prefix}_{loss_name}', loss)
-
+        
+        self.custom_epoch_loss_log(prefix, loss, loss_name)
+            
         for key, value in objectives.items():
             self.log(f'objectives/{prefix}_{key}', value)
 
         for key, value in metrics.items():
             self.log(f'metrics/{prefix}_{key}', value)
-
+            
+    def custom_epoch_loss_log(self, prefix: str, loss: torch.Tensor, loss_name: str = 'loss') -> None:
+        
+        if prefix == 'train' and self.previous_prefix == 'val':
+            self.previous_prefix = 'train'
+            self.count_epoch += 1
+            
+        if prefix == 'train':
+            self.previous_prefix = 'train'
+            self.list_loss.append(loss) # keep track of loss for each step during one epoch
+            
+            self.count_val_step = 0
+            self.count_train_step += 1
+            self.count_train_step_total += 1
+            logger.info(f'Training Epoch {self.count_epoch}, Loss: {loss}, Step: {self.count_train_step}, Total Steps: {self.count_train_step_total}')
+        
+        if prefix == 'val' and self.previous_prefix == 'train':
+            self.previous_prefix = 'val'
+            loss_epoch_last_iteration = self.list_loss[-1] # select loss of last train last iteration
+            if not isinstance(self.list_loss, list): self.list_loss = [self.list_loss] # in case of only 1 iteration
+            loss_epoch_mean = torch.mean(torch.stack(self.list_loss, dim=0), dim=0) # select mean loss of all iterations
+            self.list_loss = []
+            self.log(f'loss_epoch/train_{loss_name}_epoch_last_iteration', loss_epoch_last_iteration)
+            self.log(f'loss_epoch/train_{loss_name}_epoch_mean', loss_epoch_mean)
+            
+        if prefix == 'val':
+            self.previous_prefix = 'val'
+            self.count_train_step = 0
+            self.count_val_step += 1
+            self.count_val_step_total += 1
+            logger.info(f'Validation Epoch {self.count_epoch}, Loss: {loss}, Step: {self.count_val_step}, Total Steps: {self.count_val_step_total}')
+        
     def training_step(self, batch: Tuple[FeaturesType, TargetsType, ScenarioListType], batch_idx: int) -> torch.Tensor:
         """
         Step called for each batch example during training.
@@ -210,3 +255,27 @@ class LightningModuleWrapper(pl.LightningModule):
             optimizer_dict['lr_scheduler'] = lr_scheduler_params
 
         return optimizer_dict if 'lr_scheduler' in optimizer_dict else optimizer_dict['optimizer']
+
+    def name(self) -> str:
+        """
+        Returns the model's name.
+
+        :return: model's name
+        """
+        return self.model.__class__.__name__
+    
+    def get_checkpoint_dir(self) -> str:
+        """
+        Returns the model's checkpoint directory.
+
+        :return: model's checkpoint directory
+        """
+        return self.checkpoint_dir
+    
+    def set_checkpoint_dir(self, checkpoint_dir: str) -> None:
+        """
+        Sets the model's checkpoint directory.
+
+        :param checkpoint_dir: model's checkpoint directory
+        """
+        self.checkpoint_dir = checkpoint_dir

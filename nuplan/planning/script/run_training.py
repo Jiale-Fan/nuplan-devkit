@@ -15,8 +15,6 @@ from nuplan.planning.script.utils import set_default_path
 from nuplan.planning.training.experiments.caching import cache_data
 from nuplan.planning.training.experiments.training import TrainingEngine, build_training_engine
 
-
-
 logging.getLogger('numba').setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
@@ -81,17 +79,47 @@ def main(cfg: DictConfig) -> Optional[TrainingEngine]:
         with ProfilerContextManager(cfg.output_dir, cfg.enable_profiling, "caching"):
             cache_data(cfg=cfg, worker=worker)
         return None
-
-    elif cfg.py_func == "build_only":
-        # Build training engine only
-        with ProfilerContextManager(cfg.output_dir, cfg.enable_profiling, "build_training_engine"):
-            engine = build_training_engine(cfg, worker)
-        
-        return engine
-
     else:
         raise NameError(f'Function {cfg.py_func} does not exist')
 
 
 if __name__ == '__main__':
-    main()
+    cfg = dict(
+        # Location of path with all simulation configs
+        CONFIG_PATH = '../nuplan/planning/script/config/training',
+        CONFIG_NAME = 'default_training',
+
+        # Name of the experiment
+        EXPERIMENT = 'vector_experiment',
+        JOB_NAME = 'vector_model',
+        TRAINING_MODEL = 'training_vector_model',
+
+        # Training params
+        PY_FUNC = 'train', # ['train','test','cache']
+        SCENARIO_BUILDER = 'nuplan', # ['nuplan','nuplan_challenge','nuplan_mini']
+        SCENARIO_SELECTION = 500,
+        MAX_EPOCHS = 2,
+        BATCH_SIZE = 8,
+
+        # add save directory
+        SAVE_DIR = os.getenv('NUPLAN_EXP_ROOT')
+    )
+    hydra.core.global_hydra.GlobalHydra.instance().clear()  # reinitialize hydra if already initialized
+    hydra.initialize(config_path='../nuplan/planning/script/config/training')
+    
+    cfg = hydra.compose(config_name=cfg["CONFIG_NAME"], overrides=[
+        f'group={str(cfg.SAVE_DIR)}/training',
+        f'cache.cache_path={str(cfg.SAVE_DIR)}/cache',
+        f'experiment_name={cfg.EXPERIMENT}',
+        f'job_name={cfg.JOB_NAME}',
+        f'py_func={cfg.PY_FUNC}',
+        f'+training={cfg.TRAINING_MODEL}',  # raster model that consumes ego, agents and map raster layers and regresses the ego's trajectory
+        f'scenario_builder={cfg.SCENARIO_BUILDER}',  # use nuplan mini database  # ['nuplan','nuplan_challenge','nuplan_mini']
+        f'scenario_filter.limit_total_scenarios={cfg.SCENARIO_SELECTION}',  # Choose 500 scenarios to train with
+        f'lightning.trainer.params.accelerator={cfg.lightning_accelerator}',  # ddp is not allowed in interactive environment, using ddp_spawn instead - this can bottleneck the data pipeline, it is recommended to run training outside the notebook
+        f'lightning.trainer.params.max_epochs={cfg.MAX_EPOCHS}',
+        f'data_loader.params.batch_size={cfg.BATCH_SIZE}',
+        f'data_loader.params.num_workers=8',
+    ])
+    
+    main(cfg)
