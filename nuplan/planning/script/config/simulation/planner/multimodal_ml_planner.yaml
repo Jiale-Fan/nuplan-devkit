@@ -2,7 +2,7 @@ ml_planner:
   _target_: nuplan.planning.simulation.planner.ml_planner.multimodal_ml_planner.MultimodalMLPlanner
   _convert_: 'all'
 
-  draw_visualization: false
+  draw_visualization: true
 
   model_config: ???  # Dictionary key from existing planner model config (e.g. raster_model)
   checkpoint_path: ???  # Path to trained model checkpoint

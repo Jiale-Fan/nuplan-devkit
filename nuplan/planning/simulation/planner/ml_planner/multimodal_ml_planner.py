@@ -1,5 +1,5 @@
 import time
-from typing import List, Optional, Type, cast, Dict
+from typing import List, Optional, Type, cast, Dict, Tuple
 
 import numpy as np
 import numpy.typing as npt
@@ -81,7 +81,7 @@ class MultimodalMLPlanner(AbstractPlanner):
         # ego_mean_speed is normalized from 0 to 1
         
 
-    def _infer_model(self, features: FeaturesType) -> npt.NDArray[np.float32]:
+    def _infer_model(self, features: FeaturesType) -> Tuple[npt.NDArray[np.float32]]:
         """
         Makes a single inference on a Pytorch/Torchscript model.
 
@@ -93,9 +93,11 @@ class MultimodalMLPlanner(AbstractPlanner):
 
         # Extract trajectory prediction
         trajectory_predicted = cast(TensorFeature, predictions['multimodal_trajectories'])
+        pred_probs = cast(TensorFeature, predictions['mode_probs'])
         trajectories_tensor = trajectory_predicted.data.cpu().detach().numpy()
+        pred_probs_tensor = pred_probs.data.cpu().detach().numpy()
 
-        return trajectories_tensor
+        return trajectories_tensor, pred_probs_tensor
 
     # def _infer_model(self, features: FeaturesType) -> npt.NDArray[np.float32]:
     #     """
@@ -119,7 +121,7 @@ class MultimodalMLPlanner(AbstractPlanner):
 
     #     return cast(npt.NDArray[np.float32], trajectory)
 
-    def _select_best_trajectory(self, trajectories: Trajectory, history: SimulationHistoryBuffer) -> npt.NDArray[np.float32]:
+    def _select_best_trajectory_metrics(self, trajectories: Trajectory, history: SimulationHistoryBuffer) -> npt.NDArray[np.float32]:
         """
         Selects the best trajectory from a set of trajectories.
         
@@ -198,8 +200,6 @@ class MultimodalMLPlanner(AbstractPlanner):
         self._model_loader.initialize()
         self._initialization = initialization
 
-        
-
     def name(self) -> str:
         """Inherited, see superclass."""
         return self.__class__.__name__
@@ -224,10 +224,11 @@ class MultimodalMLPlanner(AbstractPlanner):
         # Infer model
         start_time = time.perf_counter()
 
-        trajectories_tensor = self._infer_model(features)
+        trajectories_tensor, pred_probs = self._infer_model(features)
 
         trajectories_object = Trajectory(trajectories_tensor[0])
-        selected_trajectory = self._select_best_trajectory(trajectories_object, history)
+        selected_trajectory = self._select_best_trajectory_metrics(trajectories_object, history)
+        # selected_trajectory = self._select_best_trajectory_probs(trajectories_object, pred_probs)
 
         if self.draw_visualization:
             self._draw_visualization(features, selected_trajectory, trajectories_tensor)
@@ -241,6 +242,11 @@ class MultimodalMLPlanner(AbstractPlanner):
         trajectory = InterpolatedTrajectory(states)
 
         return trajectory
+    
+    def _select_best_trajectory_probs(self, trajectories: Trajectory, probs: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:
+        probs = probs.squeeze(0)
+        sel_idx = np.argmax(probs)
+        return trajectories.data[sel_idx]
 
     def _draw_visualization(self, features: FeaturesType, selected_trajectory: npt.NDArray[np.float32], multimodal_trajectory: npt.NDArray[np.float32]) -> None:
 
