@@ -1,4 +1,4 @@
-tasks: [simulate, open_nuboard] # [train, simulate, open_nuboard]
+tasks: [simulate] # [train, simulate, open_nuboard]
 model_name: urban_driver_closed_loop # [vector, autobotego]
 
 # adapt training params
@@ -12,9 +12,9 @@ nb_workers: 8
 
 # adapt simulation params
 planner: ml_planner  # [simple_planner, ml_planner]
-challenge: open_loop_boxes  # [open_loop_boxes, closed_loop_nonreactive_agents, closed_loop_reactive_agents]
+challenge: closed_loop_nonreactive_agents  # [open_loop_boxes, closed_loop_nonreactive_agents, closed_loop_reactive_agents]
 scenarios: all_scenarios # [all_scenarios, nuplan_challenge_scenarios, one_continuous_log, one_of_each_scenario_type] # initially select all scenarios in the database
-nb_scenarios_per_type: 1 # use 10 scenarios per scenario type
+nb_scenarios_per_type: 10 # use 10 scenarios per scenario type
 scenario_types: [
   starting_left_turn,
   starting_right_turn,

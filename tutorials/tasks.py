@@ -203,3 +203,13 @@ if __name__ == '__main__':
     cfgs = task.load_cfgs("default_config_urban_driver_closed_loop")
     # [default_config_autobotego, default_config_urban_driver_open_loop, default_config_urban_driver_closed_loop, default_config_urban_autobot, default_config_safepathnet]
     task.main(cfgs)
+
+
+"""
+
+conda activate nuplan
+cd /home/jiale/Documents/master/nuplan-devkit
+python ./tutorials/tasks.py
+
+
+"""
